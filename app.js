@@ -588,6 +588,9 @@ function goStep(n){
 function resetScan(){
   state.image=null;state.pickedRGB=null;state.pickedRGBCorrected=null;
   state.currentPH=null;state.imageDataFull=null;state.whiteBalance=null;
+  var box = $('receivedPhotoBox');
+  if (box) { box.style.display = 'none'; box.dataset.dataUrl = ''; }
+  clearInterval(autoStepTimer);
   goStep(1);
 }
 
@@ -1158,8 +1161,11 @@ var qrState = {
   timer: null,
   pollTimer: null,
   lastMsgTs: 0,
+  photoReceived: false,
   mode: 'host'
 };
+
+var autoStepTimer = null;
 
 function makeToken(len){
   len = len || 24;
@@ -1221,15 +1227,68 @@ function handleHostMessage(msg){
   if (msg.type === 'hello') {
     $('qrStatus').innerHTML = '📱 <b style="color:#10b981">Điện thoại đã kết nối!</b> Đang chờ ảnh...';
   } else if (msg.type === 'photo') {
+    // Chỉ xử lý lần đầu, bỏ qua các lần gửi lại
+    if (qrState.photoReceived) return;
+    qrState.photoReceived = true;
+
     $('qrStatus').innerHTML = '✅ <b style="color:#10b981">Đã nhận ảnh!</b> Đang xử lý...';
     stopQRTimer();
     stopHostPolling();
     setTimeout(function(){
       $('qrPanel').style.display = 'none';
-      loadImageFromDataUrl(msg.dataUrl);
+      showReceivedPhoto(msg.dataUrl);
       toast('📥 Đã nhận ảnh từ điện thoại');
     }, 300);
   }
+}
+
+/* ============================================================
+   HIỂN THỊ ẢNH VỪA NHẬN + TỰ ĐỘNG CHUYỂN BƯỚC
+   ============================================================ */
+function showReceivedPhoto(dataUrl){
+  var box = $('receivedPhotoBox');
+  var img = $('receivedPhotoImg');
+  var info = $('receivedPhotoInfo');
+
+  img.src = dataUrl;
+  box.style.display = 'block';
+
+  var sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
+  info.textContent = 'Nhận lúc ' + new Date().toLocaleTimeString('vi-VN') + ' · ~' + sizeKB + ' KB';
+  box.dataset.dataUrl = dataUrl;
+
+  setTimeout(function(){
+    box.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 200);
+
+  // Đếm ngược 5 giây
+  var countdown = 5;
+  $('autoStepCountdown').textContent = countdown;
+  clearInterval(autoStepTimer);
+  autoStepTimer = setInterval(function(){
+    countdown--;
+    var el = $('autoStepCountdown');
+    if (el) el.textContent = countdown;
+    if (countdown <= 0) {
+      clearInterval(autoStepTimer);
+      useReceivedPhoto();
+    }
+  }, 1000);
+}
+
+function useReceivedPhoto(){
+  clearInterval(autoStepTimer);
+  var box = $('receivedPhotoBox');
+  var dataUrl = box.dataset.dataUrl;
+  if (!dataUrl) { toast('Không có ảnh để dùng'); return; }
+  box.style.display = 'none';
+  loadImageFromDataUrl(dataUrl);
+}
+
+function cancelAutoStep(){
+  clearInterval(autoStepTimer);
+  var box = $('receivedPhotoBox');
+  if (box) box.style.display = 'none';
 }
 
 function fmtTime(ms){
@@ -1253,12 +1312,17 @@ function openQRPanel(){
 function createQRToken(){
   qrState.token = makeToken(24);
   qrState.expiresAt = Date.now() + 3*60*1000;
+  qrState.photoReceived = false;
+  var box = $('receivedPhotoBox');
+  if (box) { box.style.display = 'none'; box.dataset.dataUrl = ''; }
+  clearInterval(autoStepTimer);
+
   var url = getBaseUrl() + '?cam=' + encodeURIComponent(qrState.token);
 
-  var box = $('qrBox');
-  box.innerHTML = '';
+  var boxQR = $('qrBox');
+  boxQR.innerHTML = '';
   try {
-    new QRCode(box, {
+    new QRCode(boxQR, {
       text: url,
       width: 220,
       height: 220,
@@ -1267,7 +1331,7 @@ function createQRToken(){
       correctLevel: QRCode.CorrectLevel.M
     });
   } catch(e) {
-    box.innerHTML = '<div style="color:#ef4444;font-size:.85rem">Không tạo được QR.<br>'+url+'</div>';
+    boxQR.innerHTML = '<div style="color:#ef4444;font-size:.85rem">Không tạo được QR.<br>'+url+'</div>';
   }
 
   var urlBox = document.getElementById('qrUrlDisplay');
@@ -1275,7 +1339,7 @@ function createQRToken(){
     urlBox = document.createElement('div');
     urlBox.id = 'qrUrlDisplay';
     urlBox.style.cssText = 'font-size:.72rem;color:#6b7280;margin-top:8px;word-break:break-all;background:#f9fafb;padding:6px;border-radius:6px';
-    box.parentNode.appendChild(urlBox);
+    boxQR.parentNode.appendChild(urlBox);
   }
   urlBox.textContent = url;
 
@@ -1463,6 +1527,23 @@ $('qrCloseBtn').addEventListener('click', function(){
   stopHostPolling();
   $('qrPanel').style.display = 'none';
 });
+
+// Gắn sự kiện cho các nút box ảnh vừa nhận
+(function bindReceivedPhotoButtons(){
+  var btnUse = $('useReceivedPhotoBtn');
+  if (btnUse) btnUse.addEventListener('click', useReceivedPhoto);
+
+  var btnRetake = $('retakePhotoBtn');
+  if (btnRetake) {
+    btnRetake.addEventListener('click', function(){
+      cancelAutoStep();
+      var box = $('receivedPhotoBox');
+      if (box) { box.style.display = 'none'; box.dataset.dataUrl = ''; }
+      openQRPanel();
+      toast('🔄 Mở lại QR — quét lại bằng điện thoại');
+    });
+  }
+})();
 
 (function checkPhoneMode(){
   var m = location.search.match(/[?&]cam=([^&]+)/);
