@@ -575,7 +575,6 @@ function loadImageFromDataUrl(dataUrl){
     tc.height=img.height*scale;
     tc.getContext('2d').drawImage(img,0,0,tc.width,tc.height);
     state.imageThumb=tc.toDataURL('image/jpeg',0.7);
-    // Chuyển sang bước CROP
     goStep(2);
     initCropSelector();
   };
@@ -903,7 +902,7 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 /* ============================================================
-   CROP CANVAS (chọn màu — Bước 3)
+   CROP CANVAS — Chọn màu (Bước 3)
    ============================================================ */
 function drawCropCanvas(){
   if(!state.image)return;
@@ -962,106 +961,224 @@ function analyze(){
   state.currentDE=result.bestDE;
   state.currentRefMatch=result.refMatch;
   state.currentLab=result.lab;
+
   $('phValue').textContent=ph.toFixed(1);
   $('phStatus').textContent='Đất '+info.status;
   $('phStatus').className='status-badge '+info.cls;
+
   var conf=result.confidence;
   var confColor = conf>=80?'#10b981' : conf>=60?'#f59e0b' : '#ef4444';
   $('confFill').style.width=conf+'%';
   $('confFill').style.background=confColor;
   $('confTxt').textContent=conf+'% · '+(conf>=80?'Rất tốt':conf>=60?'Khá tốt':conf>=40?'Trung bình':'Thấp — nên đo lại');
+
   $('r3').textContent=state.pickedRGB.r+', '+state.pickedRGB.g+', '+state.pickedRGB.b;
   $('rgbCorr3').textContent=state.pickedRGBCorrected.r+', '+state.pickedRGBCorrected.g+', '+state.pickedRGBCorrected.b;
   $('h3').textContent=state.pickedHSV.h+'°, '+state.pickedHSV.s+'%, '+state.pickedHSV.v+'%';
   $('lab3').textContent='L:'+result.lab.L.toFixed(1)+' a:'+result.lab.a.toFixed(1)+' b:'+result.lab.b.toFixed(1);
   $('de3').textContent=result.bestDE.toFixed(1);
   $('refMatch').textContent='pH '+result.refMatch.ph;
-  $('recommend').innerHTML=getRecommendation(ph);
-  calcLime();
+
+  // Phương án cải tạo chi tiết
+  $('recommend').innerHTML = buildRecommendation(ph, result.confidence, result.lab, result.bestDE, result.refMatch);
+
   goStep(4);
 }
 
-function getRecommendation(ph){
-  if(ph<5.0)return '<b>⚠️ Đất chua gắt (pH '+ph.toFixed(1)+')</b><br>Bón vôi ngay để nâng pH lên 5.5–6.0. Chia 2–3 đợt cách 3–4 tuần. Rải quanh tán cách gốc 0.5 m.';
-  if(ph<5.5)return '<b>🟡 Đất hơi chua (pH '+ph.toFixed(1)+')</b><br>Bón vôi nhẹ nâng lên 5.5–6.0. Chia 2 đợt cách 3 tuần. Kết hợp phân hữu cơ hoai mục.';
-  if(ph<=6.5)return '<b>✅ Đất tối ưu cho sầu riêng (pH '+ph.toFixed(1)+')</b><br>Duy trì bón hữu cơ 2–3 tháng/lần. Không cần bón vôi.';
-  return '<b>🔵 Đất hơi kiềm (pH '+ph.toFixed(1)+')</b><br>Bổ sung phân hữu cơ, rơm rạ, vỏ cà phê. Hạn chế phân gốc canxi.';
-}
-
 /* ============================================================
-   LIME CALC
+   PHƯƠNG ÁN CẢI TẠO CHI TIẾT
    ============================================================ */
-function calcLime(){
-  if(state.currentPH==null){return;}
-  var area=Math.max(1,parseFloat($('areaInput').value)||0);
-  var trees=Math.max(1,parseFloat($('treeInput').value)||1);
-  var radius=Math.max(0.5,parseFloat($('radiusInput').value)||1);
-  var ph=state.currentPH;
-  var deltaPH=Math.max(0,5.8-ph);
-  if(deltaPH===0){
-    $('limeResult').innerHTML='<b>✅ Không cần bón vôi</b><br>pH hiện tại ('+ph.toFixed(1)+') đã đạt ngưỡng tối ưu.';
-    return;
+function buildRecommendation(ph, confidence, lab, bestDE, refMatch){
+  // ===== 1. PHÂN LOẠI TÌNH TRẠNG =====
+  var group, groupIcon, groupColor, groupTitle;
+  if (ph < 5.0) {
+    group = 'very-acid';
+    groupIcon = '🚨';
+    groupColor = '#dc2626';
+    groupTitle = 'ĐẤT CHUA GẮT';
+  } else if (ph < 5.5) {
+    group = 'acid';
+    groupIcon = '⚠️';
+    groupColor = '#ea580c';
+    groupTitle = 'ĐẤT CHUA';
+  } else if (ph <= 6.5) {
+    group = 'optimal';
+    groupIcon = '✅';
+    groupColor = '#10b981';
+    groupTitle = 'ĐẤT TỐI ƯU';
+  } else if (ph <= 7.2) {
+    group = 'slightly-alkaline';
+    groupIcon = '🟡';
+    groupColor = '#f59e0b';
+    groupTitle = 'ĐẤT HƠI KIỀM';
+  } else {
+    group = 'alkaline';
+    groupIcon = '🔵';
+    groupColor = '#3b82f6';
+    groupTitle = 'ĐẤT KIỀM';
   }
-  var totalLime=deltaPH*10*0.1*area;
-  var perTree=totalLime/trees;
-  var canopyArea=Math.PI*radius*radius;
-  var perCanopy=canopyArea*deltaPH*10*0.1;
-  $('limeResult').innerHTML=
-    '<b>📊 Kết quả:</b><br>'+
-    '• pH hiện tại: <b>'+ph.toFixed(1)+'</b> · Mục tiêu: <b>5.8</b><br>'+
-    '• ΔpH cần nâng: <b>'+deltaPH.toFixed(1)+'</b><br>'+
-    '• <b style="color:#047857;font-size:1.1rem">Tổng vôi CaCO₃: '+totalLime.toFixed(1)+' kg</b> cho '+area+' m²<br>'+
-    '• <b>Lượng vôi/gốc:</b> '+perTree.toFixed(2)+' kg/gốc<br>'+
-    '• <b>Lượng vôi/tán:</b> '+perCanopy.toFixed(2)+' kg<br>'+
-    '<em style="color:#065f46">*Chia 2–3 đợt, cách 3–4 tuần.</em>';
-}
 
-/* ============================================================
-   SAVE LOG
-   ============================================================ */
-$('saveFarm').addEventListener('change',function(){
-  $('customFarmWrap').style.display=this.value==='Lô khác'?'block':'none';
-});
-
-function saveLog(){
-  if(state.currentPH==null){toast('Chưa có kết quả!');return;}
-  var farmSel=$('saveFarm');
-  var farm=farmSel.value;
-  if(farm==='Lô khác') farm=$('customFarm').value.trim() || 'Lô chưa đặt tên';
-  var entry={
-    id:Date.now(),
-    time:new Date().toISOString(),
-    farm:farm,
-    ph:state.currentPH,
-    status:state.currentStatus.status,
-    confidence:state.currentConfidence,
-    deltaE:state.currentDE,
-    refMatchPH:state.currentRefMatch.ph,
-    r:state.pickedRGB.r, g:state.pickedRGB.g, b:state.pickedRGB.b,
-    rCorr:state.pickedRGBCorrected.r,
-    gCorr:state.pickedRGBCorrected.g,
-    bCorr:state.pickedRGBCorrected.b,
-    lab:state.currentLab,
-    temp:parseFloat($('saveTemp').value)||null,
-    humidity:parseFloat($('saveHumidity').value)||null,
-    note:$('saveNote').value.trim(),
-    image:state.imageThumb
-  };
-  var logs=getLogs();
-  logs.unshift(entry);
-  try{
-    localStorage.setItem('dsp_logs',JSON.stringify(logs));
-    toast('✅ Đã lưu vào nhật ký!');
-    resetScan();
-    showTab('log');
-  }catch(e){
-    toast('❌ Lỗi lưu (có thể bộ nhớ đầy): '+e.message);
+  // ===== 2. TÍNH LƯỢNG VÔI THAM KHẢO =====
+  var targetPH = 5.8;
+  var deltaPH = Math.max(0, targetPH - ph);
+  var limePerHa = 0;
+  var limePerTree = 0;
+  var limePerM2 = 0;
+  if (deltaPH > 0) {
+    limePerHa = deltaPH * 1000;
+    limePerM2 = limePerHa / 10000;
+    limePerTree = limePerHa / 200;
   }
-}
 
-function getLogs(){
-  try{return JSON.parse(localStorage.getItem('dsp_logs'))||[];}
-  catch(e){return[];}
+  // ===== 3. PHƯƠNG ÁN THEO TỪNG NHÓM =====
+  var html = '';
+  html += '<h4 style="margin:0 0 12px;color:' + groupColor + ';font-size:1.1rem">';
+  html += groupIcon + ' ' + groupTitle + ' — pH ' + ph.toFixed(1);
+  html += '</h4>';
+
+  // Khối 1: Chẩn đoán
+  html += '<div style="background:#fff;padding:12px;border-radius:8px;margin-bottom:10px;border-left:4px solid ' + groupColor + '">';
+  html += '<div style="font-weight:700;font-size:.9rem;margin-bottom:6px">🔍 Chẩn đoán</div>';
+  html += '<div style="font-size:.85rem;line-height:1.6">';
+
+  if (group === 'very-acid') {
+    html += 'pH <b>quá thấp</b> — cây sầu riêng không hấp thu được <b>lân (P)</b>, <b>canxi (Ca)</b>, <b>magie (Mg)</b>. ';
+    html += '<b>Nấm Phytophthora</b> phát triển mạnh → nguy cơ <b>xì mủ, nứt thân</b> rất cao. ';
+    html += '<b>Nhôm (Al³⁺)</b> và <b>sắt (Fe²⁺)</b> gây độc rễ, cây còi cọc, rụng lá non.';
+  } else if (group === 'acid') {
+    html += 'pH <b>hơi thấp</b> so với ngưỡng tối ưu (5.5–6.5) của sầu riêng. ';
+    html += 'Cây vẫn sinh trưởng được nhưng <b>hiệu quả hấp thu dinh dưỡng giảm</b>, dễ bị nấm bệnh khi mưa nhiều.';
+  } else if (group === 'optimal') {
+    html += 'pH <b>nằm trong khoảng lý tưởng</b> cho sầu riêng (5.5–6.5). ';
+    html += 'Cây hấp thu dinh dưỡng tốt, rễ khỏe, ít bị nấm <i>Phytophthora</i>. ';
+    html += 'Không cần cải tạo gấp — chỉ cần <b>duy trì</b> ổn định.';
+  } else if (group === 'slightly-alkaline') {
+    html += 'pH <b>hơi cao</b>. Một số vi chất như <b>sắt (Fe)</b>, <b>kẽm (Zn)</b>, <b>mangan (Mn)</b> bị kết tủa, ';
+    html += 'cây có thể vàng lá non (do thiếu Fe).';
+  } else {
+    html += 'pH <b>kiềm rõ rệt</b>. Nhiều vi chất bị khóa hoàn toàn. ';
+    html += '<b>Canxi dư thừa</b> gây đối kháng với K, Mg, Fe. Cây còi, lá vàng, năng suất giảm mạnh.';
+  }
+  html += '</div></div>';
+
+  // Khối 2: Phương án cải tạo
+  html += '<div style="background:#fff;padding:12px;border-radius:8px;margin-bottom:10px;border-left:4px solid #f59e0b">';
+  html += '<div style="font-weight:700;font-size:.9rem;margin-bottom:8px">🛠️ Phương án cải tạo</div>';
+
+  if (group === 'very-acid') {
+    html += '<div style="font-size:.85rem;line-height:1.7">';
+    html += '<b>1️⃣ Bón vôi CaCO₃ hoặc Dolomite (có Mg):</b><br>';
+    html += '&nbsp;&nbsp;• Liều lượng: <b>~' + Math.round(limePerM2*10)/10 + ' kg/m²</b> (tương đương <b>~' + Math.round(limePerTree*10)/10 + ' kg/gốc</b>)<br>';
+    html += '&nbsp;&nbsp;• Chia <b>3 đợt</b>, cách nhau <b>4 tuần</b><br>';
+    html += '&nbsp;&nbsp;• Rải quanh tán, cách gốc <b>0.5–1 m</b>, xới nhẹ cho vôi thấm<br>';
+    html += '&nbsp;&nbsp;• <b>KHÔNG bón cùng phân hóa học</b> — cách ít nhất 15 ngày<br><br>';
+    html += '<b>2️⃣ Bổ sung hữu cơ:</b> 20–30 kg phân chuồng hoai + 1–2 kg vôi bột/gốc/năm<br><br>';
+    html += '<b>3️⃣ Xử lý nấm Phytophthora:</b> Tưới <b>Metalaxyl + Mancozeb</b> quanh gốc, cách 2 tuần/lần × 3 lần<br><br>';
+    html += '<b>4️⃣ Che phủ đất:</b> Rơm rạ, cỏ khô giữ ẩm, hạn chế rửa trôi<br>';
+    html += '</div>';
+  } else if (group === 'acid') {
+    html += '<div style="font-size:.85rem;line-height:1.7">';
+    html += '<b>1️⃣ Bón vôi nâng pH lên 5.8:</b><br>';
+    html += '&nbsp;&nbsp;• Liều lượng: <b>~' + Math.round(limePerM2*10)/10 + ' kg/m²</b> (tương đương <b>~' + Math.round(limePerTree*10)/10 + ' kg/gốc</b>)<br>';
+    html += '&nbsp;&nbsp;• Chia <b>2 đợt</b>, cách nhau <b>3–4 tuần</b><br>';
+    html += '&nbsp;&nbsp;• Ưu tiên <b>vôi Dolomite</b> nếu đất thiếu Mg<br><br>';
+    html += '<b>2️⃣ Tăng hữu cơ:</b> 15–20 kg phân chuồng hoai/gốc/năm<br><br>';
+    html += '<b>3️⃣ Bón phân cân đối:</b> Ưu tiên lân nung chảy, kali sulfate thay vì clorua<br><br>';
+    html += '<b>4️⃣ Đo lại pH:</b> Sau <b>2 tháng</b> để kiểm tra hiệu quả<br>';
+    html += '</div>';
+  } else if (group === 'optimal') {
+    html += '<div style="font-size:.85rem;line-height:1.7">';
+    html += '<b>1️⃣ Duy trì ổn định:</b><br>';
+    html += '&nbsp;&nbsp;• Bón hữu cơ hoai mục <b>2–3 tháng/lần</b><br>';
+    html += '&nbsp;&nbsp;• Không bón vôi, không bón vôi bột<br><br>';
+    html += '<b>2️⃣ Kiểm soát nước:</b> Tránh ngập úng mùa mưa — đào rãnh thoát<br><br>';
+    html += '<b>3️⃣ Bổ sung vi sinh:</b> <b>Trichoderma</b> + <b>Bacillus</b> 2 lần/năm phòng nấm<br><br>';
+    html += '<b>4️⃣ Đo lại pH:</b> Mỗi <b>3–6 tháng</b> để phát hiện sớm bất thường<br>';
+    html += '</div>';
+  } else if (group === 'slightly-alkaline') {
+    html += '<div style="font-size:.85rem;line-height:1.7">';
+    html += '<b>1️⃣ Hạ pH bằng hữu cơ chua:</b><br>';
+    html += '&nbsp;&nbsp;• Bón <b>phân chuồng hoai + rơm rạ + vỏ cà phê</b><br>';
+    html += '&nbsp;&nbsp;• Hoặc dùng <b>lưu huỳnh nguyên tố (S)</b>: 50–100 g/gốc<br><br>';
+    html += '<b>2️⃣ Bổ sung vi chất dạng chelate:</b><br>';
+    html += '&nbsp;&nbsp;• <b>Fe-EDDHA</b> (sắt chelate) phun lá hoặc tưới gốc<br>';
+    html += '&nbsp;&nbsp;• <b>Zn-EDTA</b>, <b>Mn-EDTA</b> nếu cây vàng lá<br><br>';
+    html += '<b>3️⃣ Ngưng bón vôi và phân có Ca cao:</b> Đá vôi, vỏ trứng, DAP...<br><br>';
+    html += '<b>4️⃣ Đo lại pH</b> sau <b>2–3 tháng</b><br>';
+    html += '</div>';
+  } else {
+    html += '<div style="font-size:.85rem;line-height:1.7">';
+    html += '<b>1️⃣ Hạ pH mạnh bằng lưu huỳnh:</b><br>';
+    html += '&nbsp;&nbsp;• <b>Lưu huỳnh nguyên tố (S)</b>: 100–200 g/gốc/năm, chia 2 đợt<br>';
+    html += '&nbsp;&nbsp;• Hoặc <b>thạch cao (CaSO₄)</b> nếu đất mặn<br><br>';
+    html += '<b>2️⃣ Bổ sung hữu cơ lớn:</b> 30–50 kg phân chuồng hoai + 5 kg rơm rạ/gốc<br><br>';
+    html += '<b>3️⃣ Vi chất chelate:</b> Fe-EDDHA, Zn-EDTA, Mn-EDTA — bắt buộc dùng<br><br>';
+    html += '<b>4️⃣ Kiểm tra nước tưới:</b> Nếu nước có CaCO₃ cao → cần lọc/trữ trước khi tưới<br><br>';
+    html += '<b>5️⃣ Đo lại pH</b> mỗi <b>2 tháng</b><br>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Khối 3: Lịch trình
+  html += '<div style="background:#fff;padding:12px;border-radius:8px;margin-bottom:10px;border-left:4px solid #3b82f6">';
+  html += '<div style="font-weight:700;font-size:.9rem;margin-bottom:8px">📅 Lịch trình đề xuất</div>';
+  html += '<div style="font-size:.85rem;line-height:1.7">';
+
+  if (group === 'very-acid' || group === 'acid') {
+    html += '<b>Tuần 1:</b> Bón đợt 1 vôi + rải hữu cơ quanh tán<br>';
+    html += '<b>Tuần 3:</b> Tưới nấm Phytophthora (nếu có triệu chứng xì mủ)<br>';
+    html += '<b>Tuần 5:</b> Bón đợt 2 vôi<br>';
+    if (group === 'very-acid') html += '<b>Tuần 9:</b> Bón đợt 3 vôi<br>';
+    html += '<b>Tuần 8–10:</b> <b>Đo lại pH</b> kiểm tra kết quả<br>';
+    html += '<b>Tuần 12:</b> Bổ sung vi sinh Trichoderma + Bacillus<br>';
+  } else if (group === 'optimal') {
+    html += '<b>Hàng tháng:</b> Kiểm tra ẩm độ, rãnh thoát nước<br>';
+    html += '<b>Mỗi 2–3 tháng:</b> Bón hữu cơ hoai mục<br>';
+    html += '<b>Mỗi 3–6 tháng:</b> Đo pH đất<br>';
+    html += '<b>Mỗi 6 tháng:</b> Bổ sung vi sinh phòng nấm<br>';
+  } else {
+    html += '<b>Tuần 1:</b> Bón hữu cơ chua (rơm, vỏ cà phê) + lưu huỳnh đợt 1<br>';
+    html += '<b>Tuần 4:</b> Phun vi chất chelate (Fe-EDDHA, Zn-EDTA)<br>';
+    html += '<b>Tuần 8:</b> Bón lưu huỳnh đợt 2 (nếu pH còn cao)<br>';
+    html += '<b>Tuần 8–10:</b> <b>Đo lại pH</b><br>';
+    html += '<b>Tuần 12:</b> Đánh giá lại toàn bộ<br>';
+  }
+  html += '</div></div>';
+
+  // Khối 4: Lưu ý
+  html += '<div style="background:#fef3c7;padding:12px;border-radius:8px;border-left:4px solid #f59e0b">';
+  html += '<div style="font-weight:700;font-size:.9rem;margin-bottom:6px">⚠️ Lưu ý quan trọng</div>';
+  html += '<div style="font-size:.82rem;line-height:1.7">';
+
+  if (group === 'very-acid' || group === 'acid') {
+    html += '• <b>Không bón vôi cùng phân hóa học</b> — cách ít nhất 15 ngày<br>';
+    html += '• <b>Không bón vôi khi đất quá ẩm</b> — dễ gây sốc rễ<br>';
+    html += '• Rải vôi <b>đều quanh tán</b>, không đổ vào gốc<br>';
+    html += '• Sau khi bón vôi cần <b>tưới nhẹ</b> để vôi tan<br>';
+    html += '• Vôi Dolomite tốt hơn vôi nông nghiệp thường (có Mg)<br>';
+  } else if (group === 'optimal') {
+    html += '• <b>Không bón vôi</b> khi không cần — dư Ca gây mất cân đối<br>';
+    html += '• Kiểm tra pH định kỳ để phát hiện sớm biến động<br>';
+    html += '• Hữu cơ hoai mục là "thức ăn chính" — đừng bỏ qua<br>';
+  } else {
+    html += '• <b>Lưu huỳnh (S)</b> cần <b>vi sinh vật</b> chuyển hóa — đất phải có hữu cơ<br>';
+    html += '• <b>Không dùng axit mạnh</b> trực tiếp — gây chết rễ<br>';
+    html += '• Vi chất chelate (EDDHA/EDTA) <b>không bị kết tủa</b> ở pH cao<br>';
+    html += '• Kiểm tra nguồn nước tưới — nếu có CaCO₃ cao phải xử lý trước<br>';
+  }
+  html += '</div></div>';
+
+  // Khối 5: Chất lượng phân tích
+  var confLabel = confidence >= 80 ? '🟢 Cao' : confidence >= 60 ? '🟡 Khá' : confidence >= 40 ? '🟠 Trung bình' : '🔴 Thấp';
+  html += '<div style="background:#eff6ff;padding:10px;border-radius:8px;border-left:4px solid #3b82f6;font-size:.8rem;margin-top:10px">';
+  html += '<b>📊 Chất lượng phân tích:</b> ' + confLabel + ' (' + confidence + '%) · ';
+  html += 'Màu gần nhất: <b>pH ' + refMatch.ph + '</b> · ΔE = ' + bestDE.toFixed(1);
+  if (confidence < 60) {
+    html += '<br><span style="color:#dc2626">⚠️ Độ tin cậy thấp — nên đo lại với ánh sáng tốt hơn hoặc dùng giấy quỳ mới.</span>';
+  }
+  html += '</div>';
+
+  return html;
 }
 
 /* ============================================================
@@ -1094,8 +1211,13 @@ function renderHome(){
 }
 
 /* ============================================================
-   LOG TAB
+   LOG TAB (xem dữ liệu cũ)
    ============================================================ */
+function getLogs(){
+  try{return JSON.parse(localStorage.getItem('dsp_logs'))||[];}
+  catch(e){return[];}
+}
+
 function renderLog(){
   var logs=getLogs();
   var filter=$('filterVuon').value;
@@ -1160,27 +1282,9 @@ function viewLog(id){
   html+='<div><b>Vườn:</b> '+escapeHtml(log.farm)+'</div>';
   html+='<div><b>pH:</b> <span style="color:'+info.color+';font-size:1.2rem;font-weight:800">'+log.ph.toFixed(1)+'</span> ('+log.status+')</div>';
   if(log.confidence)html+='<div><b>Độ tin cậy:</b> '+log.confidence+'%</div>';
-  if(log.deltaE)html+='<div><b>ΔE2000:</b> '+log.deltaE+'</div>';
-  if(log.refMatchPH)html+='<div><b>Màu tham chiếu gần nhất:</b> pH '+log.refMatchPH+'</div>';
-  html+='<div><b>RGB gốc:</b> '+log.r+', '+log.g+', '+log.b+'</div>';
-  if(log.rCorr)html+='<div><b>RGB hiệu chỉnh:</b> '+log.rCorr+', '+log.gCorr+', '+log.bCorr+'</div>';
-  if(log.lab)html+='<div><b>CIELAB:</b> L:'+log.lab.L.toFixed(1)+' a:'+log.lab.a.toFixed(1)+' b:'+log.lab.b.toFixed(1)+'</div>';
-  if(log.temp)html+='<div><b>Nhiệt độ đất:</b> '+log.temp+'°C</div>';
-  if(log.humidity)html+='<div><b>Độ ẩm đất:</b> '+log.humidity+'%</div>';
   if(log.note)html+='<div><b>Ghi chú:</b> '+escapeHtml(log.note)+'</div>';
   html+='</div>';
   $('modalContent').innerHTML=html;
-  $('editNoteBtn').onclick=function(){
-    var newNote=prompt('Sửa ghi chú:', log.note||'');
-    if(newNote===null)return;
-    log.note=newNote;
-    var all=getLogs();
-    for(var k=0;k<all.length;k++)if(all[k].id===id){all[k].note=newNote;break;}
-    localStorage.setItem('dsp_logs',JSON.stringify(all));
-    toast('✅ Đã cập nhật');
-    closeModal();
-    renderLog();
-  };
   $('deleteFromModalBtn').onclick=function(){
     closeModal();
     deleteLog(id);
@@ -1211,13 +1315,12 @@ function clearLog(){
 function exportCSV(){
   var logs=getLogs();
   if(!logs.length){toast('Không có dữ liệu');return;}
-  var rows=[['Thoi gian','Vuon','pH','Trang thai','Do tin cay','DeltaE','R goc','G goc','B goc','R chinh','G chinh','B chinh','Nhiet do','Do am','Ghi chu']];
+  var rows=[['Thoi gian','Vuon','pH','Trang thai','Do tin cay','Ghi chu']];
   for(var i=0;i<logs.length;i++){
     var l=logs[i];
     rows.push([
       '"'+new Date(l.time).toLocaleString('vi-VN')+'"',
-      '"'+l.farm+'"',l.ph.toFixed(1),l.status,(l.confidence||0)+'%',l.deltaE||'',
-      l.r,l.g,l.b,l.rCorr||'',l.gCorr||'',l.bCorr||'',l.temp||'',l.humidity||'',
+      '"'+l.farm+'"',l.ph.toFixed(1),l.status,(l.confidence||0)+'%',
       '"'+(l.note||'').replace(/"/g,'""')+'"'
     ]);
   }
@@ -1285,7 +1388,7 @@ $('importJSON').addEventListener('change',function(e){
     try{
       var data=JSON.parse(ev.target.result);
       if(!data.logs||!Array.isArray(data.logs))throw new Error('File không hợp lệ');
-      if(!confirm('Phục hồi '+data.logs.length+' bản ghi? Dữ liệu hiện tại sẽ bị ghi đè.'))return;
+      if(!confirm('Phục hồi '+data.logs.length+' bản ghi?'))return;
       localStorage.setItem('dsp_logs',JSON.stringify(data.logs));
       if(data.coefficients)localStorage.setItem('dsp_coef',JSON.stringify(data.coefficients));
       if(data.refColors){
@@ -1463,11 +1566,9 @@ window.addEventListener('offline',updateStatus);
 /* ============================================================
    WEBSOCKET (PieSocket)
    ============================================================ */
-
-// ===== CẤU HÌNH — THAY BẰNG THÔNG TIN CỦA BẠN =====
 var PIESOCKET_CONFIG = {
-  clusterId: 'free.blr2',                                    // ← THAY CLUSTER ID
-  apiKey: 'sJTFr7fnhoX3fbL2dhGUHeH7w6nHBvthAZ0mWR3J'   // ← THAY API KEY
+  clusterId: 'free.blr2',
+  apiKey: 'sJTFr7fnhoX3fbL2dhGUHeH7w6nHBvthAZ0mWR3J'
 };
 
 var wsState = {
@@ -1766,7 +1867,7 @@ function runPhoneMode(roomId, token){
       '<button id="pShot" style="display:block;width:100%;margin:12px 0;padding:15px;border:none;border-radius:10px;background:#10b981;color:#fff;font-size:1rem;font-weight:700;cursor:pointer" disabled>📸 Chụp & gửi về máy tính</button>' +
       '<button id="pSwitch" style="display:block;width:100%;margin:8px 0;padding:11px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:.9rem;cursor:pointer">🔄 Đổi camera trước/sau</button>' +
       '<canvas id="pCanvas" style="display:none"></canvas>' +
-      '<div style="font-size:.8rem;color:#6b7280;margin-top:12px">Ảnh sẽ gửi qua WebSocket — <b>có thể dùng 4G, không cần cùng WiFi!</b></div>' +
+      '<div style="font-size:.8rem;color:#6b7280;margin-top:12px">Ảnh sẽ gửi qua WebSocket — <b>có thể dùng 4G!</b></div>' +
       '<div id="phoneDebug" style="font-size:.7rem;color:#9ca3af;margin-top:8px;font-family:monospace"></div>' +
     '</div>';
 
