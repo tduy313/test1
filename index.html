@@ -114,6 +114,13 @@ label input:focus,label select:focus,label textarea:focus{outline:2px solid #10b
 #camDeviceSelect{padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-family:inherit;width:100%;margin-top:4px}
 #camPermBox{border:1px solid #e5e7eb}
 #requestCamPerm{margin:0}
+
+/* BOX ẢNH VỪA NHẬN */
+#receivedPhotoBox{border:3px solid #10b981;background:#ecfdf5;animation:popIn .4s ease}
+@keyframes popIn{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
+#receivedPhotoImg{max-width:100%;max-height:400px;border-radius:8px;display:block;margin:0 auto;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+#autoStepCountdown{display:inline-block;min-width:20px;padding:2px 6px;background:#10b981;color:#fff;border-radius:10px;font-weight:800;text-align:center}
+
 @media(max-width:480px){
 h2,h3{font-size:.98rem}
 .btn{font-size:.85rem;padding:10px 14px}
@@ -174,6 +181,24 @@ h2,h3{font-size:.98rem}
 
   <div id="step1">
     <h3>Bước 1: Chụp ảnh giấy quỳ</h3>
+
+    <!-- BOX ẢNH VỪA NHẬN TỪ ĐIỆN THOẠI -->
+    <div id="receivedPhotoBox" class="card" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <h4 style="margin:0;color:#047857">📥 Ảnh vừa nhận từ điện thoại</h4>
+        <span id="receivedPhotoInfo" class="muted" style="font-size:.75rem">—</span>
+      </div>
+      <div style="text-align:center;background:#fff;border-radius:10px;padding:8px;margin-bottom:10px">
+        <img id="receivedPhotoImg" alt="Ảnh từ điện thoại">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary big" id="useReceivedPhotoBtn" style="flex:1;margin:0">✅ Dùng ảnh này — Chọn màu</button>
+        <button class="btn secondary" id="retakePhotoBtn" style="margin:0">🔄 Chụp lại</button>
+      </div>
+      <div class="alert alert-info" style="margin-top:10px">
+        💡 Tự động chuyển sang bước chọn màu sau <b id="autoStepCountdown">5</b> giây...
+      </div>
+    </div>
 
     <div id="camPermBox" class="card" style="padding:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -384,23 +409,22 @@ h2,h3{font-size:.98rem}
       <li><b>Máy tính:</b> Vào tab <b>📸 Đo pH</b> → box <b>🎥 Quyền Camera</b> → bấm <b>🔐 Cấp quyền Camera</b> → chọn <b>Cho phép / Allow</b>.</li>
       <li><b>Nếu bị chặn:</b> Bấm 🔒 trên thanh địa chỉ → Site settings → Camera → Allow → F5.</li>
       <li><b>Điện thoại:</b> Sau khi quét QR, bấm <b>🔐 Cấp quyền</b> trên trang chụp ảnh.</li>
-      <li><b>Lưu ý:</b> Chrome chỉ cho phép camera khi dùng <b>HTTPS</b> hoặc <b>localhost</b>. Nếu host qua IP LAN, dùng Ngrok hoặc bật cờ <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.</li>
+      <li><b>Lưu ý:</b> Chrome chỉ cho phép camera khi dùng <b>HTTPS</b> hoặc <b>localhost</b>.</li>
     </ol>
   </details>
   <details class="accordion">
     <summary>📱 Cách dùng Camera điện thoại qua QR</summary>
     <ol>
-      <li>Host file lên HTTP: mở CMD tại thư mục chứa file → chạy <code>python -m http.server 8000</code></li>
+      <li>Host file: mở CMD tại thư mục → chạy <code>python -m http.server 8000</code></li>
       <li>Lấy IP máy tính: gõ <code>ipconfig</code> → tìm IPv4 (VD: 192.168.1.25)</li>
-      <li><b>QUAN TRỌNG:</b> Mở trên máy tính bằng <code>http://192.168.1.25:8000/duriansoil.html</code> (KHÔNG dùng localhost) — để máy tính và điện thoại cùng origin.</li>
-      <li>Vào tab <b>📸 Đo pH</b> → bấm <b>📱 Kết nối Camera điện thoại</b></li>
-      <li>Quét mã QR bằng điện thoại (cùng WiFi)</li>
-      <li>Bấm <b>🔐 Cấp quyền</b> trên điện thoại → chụp ảnh</li>
-      <li>Giữ <b>cả 2 tab đều mở</b> cho tới khi máy tính báo "Đã nhận ảnh"</li>
+      <li><b>QUAN TRỌNG:</b> Mở trên máy tính bằng <code>http://192.168.1.25:8000/duriansoil.html</code> (KHÔNG dùng localhost).</li>
+      <li>Bấm <b>📱 Kết nối Camera điện thoại</b> → quét QR trên điện thoại</li>
+      <li>Điện thoại: cấp quyền → chụp ảnh</li>
+      <li><b>Ảnh hiện lên ngay trên máy tính</b>, tự chuyển sang bước chọn màu sau 5 giây</li>
     </ol>
   </details>
   <details class="accordion">
-    <summary>🔬 Thuật toán phân tích màu pH hoạt động thế nào?</summary>
+    <summary>🔬 Thuật toán phân tích màu pH</summary>
     <ol>
       <li><b>Cân bằng trắng tự động:</b> Gray World.</li>
       <li><b>Lấy mẫu 5×5 = 25 điểm:</b> giảm nhiễu.</li>
@@ -408,22 +432,17 @@ h2,h3{font-size:.98rem}
       <li><b>Chuyển CIELAB:</b> so màu chính xác.</li>
       <li><b>ΔE2000:</b> chuẩn quốc tế CIE.</li>
       <li><b>Nội suy phi tuyến:</b> 8 màu chuẩn.</li>
-      <li><b>Confidence Score:</b> độ tin cậy.</li>
     </ol>
   </details>
   <details class="accordion">
-    <summary>💾 Cách lưu nhật ký hiệu quả</summary>
+    <summary>💾 Cách lưu nhật ký</summary>
     <ol>
       <li>Đo pH xong → xuống phần <b>💾 Lưu vào nhật ký</b>.</li>
-      <li>Chọn <b>tên vườn/lô</b> đúng vị trí lấy mẫu.</li>
-      <li>Nhập <b>nhiệt độ, độ ẩm đất</b> nếu có máy đo.</li>
-      <li>Ghi chú tình trạng: mới bón vôi, sau mưa, cây đang xử lý ra hoa...</li>
+      <li>Chọn <b>tên vườn/lô</b>.</li>
+      <li>Nhập <b>nhiệt độ, độ ẩm đất</b> nếu có.</li>
+      <li>Ghi chú tình trạng cây trồng.</li>
       <li>Vào tab <b>📊 Nhật ký</b> để xem biểu đồ, xuất CSV/PDF.</li>
     </ol>
-  </details>
-  <details class="accordion">
-    <summary>🎨 Cách hiệu chỉnh hệ quy chiếu màu</summary>
-    <p>Trong tab <b>⚙️ Huấn luyện</b>, nhấn vào từng ô màu pH 4.0 → 7.5 để nhập RGB chuẩn từ giấy quỳ Merk / bộ đệm chuẩn.</p>
   </details>
   <details class="accordion">
     <summary>🧪 Chuẩn bị mẫu đất (1:5)</summary>
