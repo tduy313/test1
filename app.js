@@ -4,7 +4,8 @@
 function $(id){return document.getElementById(id);}
 function toast(msg){
   var t=$('toast');t.textContent=msg;t.classList.add('show');
-  clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},2200);
+  clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},2400);
+  if(navigator.vibrate)try{navigator.vibrate(15);}catch(e){}
 }
 function classifyPH(ph){
   if(ph<5.5)return{status:'Chua',cls:'status-chua',color:'#ef4444'};
@@ -211,6 +212,7 @@ var state={
   currentConfidence:null,
   currentDE:null,
   currentRefMatch:null,
+  currentLab:null,
   coefficients:{a:0.012,b:-0.015,c:0.008,d:0.025,e:3.5},
   refColors:[
     {ph:4.0,r:220,g:50, b:60 },
@@ -406,20 +408,17 @@ function renderCameraPermUI(){
     status.innerHTML = 'Trình duyệt không hỗ trợ camera.' + badgeText;
   }
 
-  if (btnStart) btnStart.disabled = !canStart;
+  if (btnStart) {
+    // Chỉ bật khi đã cấp quyền VÀ chưa bật camera
+    btnStart.disabled = !canStart || !!camState.stream;
+  }
 }
 
 function initCameraPermission(){
   function doInit(){
     var checkSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-    console.log('[Camera Debug]');
-    console.log('- Protocol:', location.protocol);
-    console.log('- isSecureContext:', window.isSecureContext);
-    console.log('- mediaDevices:', !!navigator.mediaDevices);
-    console.log('- getUserMedia:', !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
 
     if (!checkSupported && location.protocol === 'https:') {
-      console.warn('[Camera] mediaDevices chưa sẵn sàng, thử lại sau 500ms...');
       setTimeout(doInit, 500);
       return;
     }
@@ -502,7 +501,11 @@ function startCameraStream(){
       state.stream = stream;
       $('video').srcObject = stream;
       $('captureBtn').disabled = false;
-      $('startCam').textContent = '🎥 Camera ON (bấm để tắt)';
+      // Đổi nút Bật → Tắt
+      var btn = $('startCam');
+      btn.innerHTML = '<span class="action-icon">⏹️</span><span class="action-label">Tắt Camera</span><span class="action-hint">Đang bật</span>';
+      btn.classList.remove('primary');
+      btn.classList.add('danger-action');
       toast('✅ Camera đã bật');
     })
     .catch(function(err){
@@ -523,7 +526,13 @@ function stopCameraStream(){
     camState.stream.getTracks().forEach(function(t){ t.stop(); });
     camState.stream = null;
     state.stream = null;
-    if ($('startCam')) $('startCam').textContent = '🎥 Bật camera máy này';
+    if ($('startCam')) {
+      var btn = $('startCam');
+      btn.innerHTML = '<span class="action-icon">🎥</span><span class="action-label">Bật Camera</span><span class="action-hint">Máy này</span>';
+      btn.classList.add('primary');
+      btn.classList.remove('danger-action');
+      btn.disabled = camState.permission !== 'granted';
+    }
     if ($('captureBtn')) $('captureBtn').disabled = true;
   }
 }
@@ -944,14 +953,26 @@ function analyze(){
   state.currentRefMatch=result.refMatch;
   state.currentLab=result.lab;
 
-  $('phValue').textContent=ph.toFixed(1);
+  var phEl = $('phValue');
+  var targetPH = ph;
+  var duration = 900;
+  var startTime = performance.now();
+  function tick(now){
+    var p = Math.min((now - startTime) / duration, 1);
+    var eased = 1 - Math.pow(1 - p, 3);
+    phEl.textContent = (targetPH * eased).toFixed(1);
+    if (p < 1) requestAnimationFrame(tick);
+    else phEl.textContent = targetPH.toFixed(1);
+  }
+  requestAnimationFrame(tick);
+
   $('phStatus').textContent='Đất '+info.status;
   $('phStatus').className='status-badge '+info.cls;
 
   var conf=result.confidence;
   var confColor = conf>=80?'#10b981' : conf>=60?'#f59e0b' : '#ef4444';
   $('confFill').style.width=conf+'%';
-  $('confFill').style.background=confColor;
+  $('confFill').style.background='linear-gradient(90deg,'+confColor+','+confColor+'cc)';
   $('confTxt').textContent=conf+'% · '+(conf>=80?'Rất tốt':conf>=60?'Khá tốt':conf>=40?'Trung bình':'Thấp — nên đo lại');
 
   $('r3').textContent=state.pickedRGB.r+', '+state.pickedRGB.g+', '+state.pickedRGB.b;
@@ -964,6 +985,24 @@ function analyze(){
   $('recommend').innerHTML = buildRecommendation(ph, result.confidence, result.lab, result.bestDE, result.refMatch);
 
   goStep(4);
+
+  if (conf >= 80) {
+    setTimeout(function(){
+      for (var i = 0; i < 12; i++) {
+        (function(){
+          var c = document.createElement('div');
+          c.textContent = ['🌱','✨','🌿','💚'][i % 4];
+          c.style.cssText = 'position:fixed;left:' + (50 + (Math.random()-0.5)*40) + '%;top:40%;font-size:' + (14 + Math.random()*14) + 'px;pointer-events:none;z-index:9998;opacity:0;transition:all 1.2s cubic-bezier(.34,1.56,.64,1)';
+          document.body.appendChild(c);
+          requestAnimationFrame(function(){
+            c.style.opacity = '1';
+            c.style.transform = 'translate(' + ((Math.random()-0.5)*300) + 'px,' + (-100 - Math.random()*200) + 'px) rotate(' + ((Math.random()-0.5)*360) + 'deg)';
+          });
+          setTimeout(function(){ c.remove(); }, 1400);
+        })();
+      }
+    }, 300);
+  }
 }
 
 /* ============================================================
@@ -1166,6 +1205,7 @@ function renderHome(){
    ============================================================ */
 function updateStatus(){
   var el=$('onlineStatus');
+  if(!el)return;
   var online=navigator.onLine;
   el.textContent=online?'● Online':'● Offline';
   el.style.background=online?'rgba(255,255,255,.2)':'rgba(239,68,68,.5)';
@@ -1306,19 +1346,15 @@ function connectHostWebSocket(){
               '?api_key=' + encodeURIComponent(PIESOCKET_CONFIG.apiKey) +
               '&notify_self=1';
 
-  console.log('[WS] Connecting to:', wsUrl);
-
   try {
     wsState.socket = new WebSocket(wsUrl);
   } catch(e) {
-    console.error('[WS] Tạo socket lỗi:', e);
     $('qrStatus').textContent = '❌ Không tạo được WebSocket: ' + e.message;
     updateWSStatus('disconnected');
     return;
   }
 
   wsState.socket.onopen = function(){
-    console.log('[WS] Connected!');
     wsState.connected = true;
     updateWSStatus('connected');
     $('qrStatus').innerHTML = '✅ <b style="color:#10b981">Đã kết nối WebSocket!</b> Đang chờ điện thoại quét QR...';
@@ -1326,7 +1362,6 @@ function connectHostWebSocket(){
   };
 
   wsState.socket.onmessage = function(event){
-    console.log('[WS] Message:', event.data);
     try {
       var msg = JSON.parse(event.data);
       handleHostMessage(msg);
@@ -1335,14 +1370,12 @@ function connectHostWebSocket(){
     }
   };
 
-  wsState.socket.onerror = function(err){
-    console.error('[WS] Error:', err);
+  wsState.socket.onerror = function(){
     updateWSStatus('disconnected');
     $('qrStatus').textContent = '❌ Lỗi WebSocket. Kiểm tra API key/cluster ID.';
   };
 
-  wsState.socket.onclose = function(ev){
-    console.log('[WS] Closed. Code:', ev.code);
+  wsState.socket.onclose = function(){
     wsState.connected = false;
     updateWSStatus('disconnected');
     if (wsState.mode === 'host' && $('qrPanel') && $('qrPanel').style.display !== 'none') {
@@ -1353,15 +1386,11 @@ function connectHostWebSocket(){
 
 function handleHostMessage(msg){
   if (!msg) return;
-  console.log('[Host] Nhận:', msg);
 
   var type = msg.type || msg.event;
   var data = msg.data || msg.payload || msg;
 
-  if (msg.token && msg.token !== wsState.token) {
-    console.warn('[Host] Token không khớp');
-    return;
-  }
+  if (msg.token && msg.token !== wsState.token) return;
   if (Date.now() > wsState.expiresAt) {
     $('qrStatus').textContent = '❌ Mã đã hết hạn.';
     return;
@@ -1374,10 +1403,7 @@ function handleHostMessage(msg){
     wsState.photoReceived = true;
 
     var dataUrl = data.dataUrl || data.photo || data;
-    if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) {
-      console.warn('[Host] Ảnh không hợp lệ');
-      return;
-    }
+    if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) return;
 
     $('qrStatus').innerHTML = '✅ <b style="color:#10b981">Đã nhận ảnh!</b>';
     stopQRTimer();
@@ -1452,33 +1478,33 @@ function runPhoneMode(roomId, token){
 
   document.body.innerHTML = '' +
     '<div style="max-width:520px;margin:0 auto;padding:16px;font-family:Arial">' +
-      '<div style="background:#10b981;color:#fff;padding:12px;border-radius:10px;text-align:center;font-weight:700">' +
+      '<div style="background:linear-gradient(135deg,#10b981,#047857);color:#fff;padding:14px;border-radius:12px;text-align:center;font-weight:800;box-shadow:0 8px 24px rgba(16,185,129,.35)">' +
         '📱 Camera điện thoại — DurianSoil' +
       '</div>' +
-      '<div id="phoneWsStatus" style="margin:8px 0;padding:8px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:.8rem;text-align:center">⏳ Đang kết nối WebSocket...</div>' +
-      '<div id="phonePermBox" style="margin:12px 0;padding:12px;background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.06)">' +
+      '<div id="phoneWsStatus" style="margin:10px 0;padding:10px;background:#fef3c7;color:#92400e;border-radius:10px;font-size:.82rem;text-align:center;font-weight:600">⏳ Đang kết nối WebSocket...</div>' +
+      '<div id="phonePermBox" style="margin:12px 0;padding:12px;background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.08)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">' +
           '<div>' +
             '<b style="font-size:.9rem">🎥 Quyền Camera</b>' +
             '<div id="phonePermStatus" style="font-size:.82rem;color:#6b7280;margin-top:4px">Đang kiểm tra...</div>' +
           '</div>' +
-          '<button id="phoneReqBtn" style="padding:9px 14px;border:none;border-radius:8px;background:#10b981;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer">🔐 Cấp quyền</button>' +
+          '<button id="phoneReqBtn" style="padding:10px 16px;border:none;border-radius:10px;background:linear-gradient(135deg,#10b981,#047857);color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;box-shadow:0 4px 14px rgba(16,185,129,.35)">🔐 Cấp quyền</button>' +
         '</div>' +
       '</div>' +
-      '<div id="phoneMsg" style="margin:12px 0;padding:10px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;font-size:.85rem">' +
+      '<div id="phoneMsg" style="margin:12px 0;padding:12px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:10px;font-size:.85rem">' +
         'Chờ kết nối WebSocket...' +
       '</div>' +
-      '<div style="position:relative;width:100%;padding-bottom:75%;background:#111;border-radius:12px;overflow:hidden">' +
+      '<div style="position:relative;width:100%;padding-bottom:75%;background:#0f172a;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.35)">' +
         '<video id="pVideo" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>' +
         '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">' +
-          '<div style="width:72%;height:26%;border:3px dashed #fff;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.4)"></div>' +
+          '<div style="width:72%;height:26%;border:3px dashed #fff;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.4),0 0 30px rgba(16,185,129,.4)"></div>' +
         '</div>' +
       '</div>' +
-      '<button id="pShot" style="display:block;width:100%;margin:12px 0;padding:15px;border:none;border-radius:10px;background:#10b981;color:#fff;font-size:1rem;font-weight:700;cursor:pointer" disabled>📸 Chụp & gửi về máy tính</button>' +
-      '<button id="pSwitch" style="display:block;width:100%;margin:8px 0;padding:11px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:.9rem;cursor:pointer">🔄 Đổi camera trước/sau</button>' +
+      '<button id="pShot" style="display:block;width:100%;margin:14px 0;padding:16px;border:none;border-radius:12px;background:linear-gradient(135deg,#10b981,#047857);color:#fff;font-size:1.05rem;font-weight:800;cursor:pointer;box-shadow:0 8px 24px rgba(16,185,129,.4)" disabled>📸 Chụp & gửi về máy tính</button>' +
+      '<button id="pSwitch" style="display:block;width:100%;margin:8px 0;padding:12px;border:1.5px solid #e5e7eb;border-radius:12px;background:#fff;font-size:.92rem;font-weight:600;cursor:pointer">🔄 Đổi camera trước/sau</button>' +
       '<canvas id="pCanvas" style="display:none"></canvas>' +
-      '<div style="font-size:.8rem;color:#6b7280;margin-top:12px">Ảnh sẽ gửi qua WebSocket — <b>có thể dùng 4G!</b></div>' +
-      '<div id="phoneDebug" style="font-size:.7rem;color:#9ca3af;margin-top:8px;font-family:monospace"></div>' +
+      '<div style="font-size:.82rem;color:#6b7280;margin-top:14px;text-align:center">Ảnh sẽ gửi qua WebSocket — <b>có thể dùng 4G!</b></div>' +
+      '<div id="phoneDebug" style="font-size:.7rem;color:#9ca3af;margin-top:8px;font-family:monospace;text-align:center"></div>' +
     '</div>';
 
   var facing = 'environment';
@@ -1516,8 +1542,6 @@ function runPhoneMode(roomId, token){
               '?api_key=' + encodeURIComponent(PIESOCKET_CONFIG.apiKey) +
               '&notify_self=0';
 
-  console.log('[Phone WS] Connecting to:', wsUrl);
-
   try {
     wsState.socket = new WebSocket(wsUrl);
   } catch(e) {
@@ -1526,7 +1550,6 @@ function runPhoneMode(roomId, token){
   }
 
   wsState.socket.onopen = function(){
-    console.log('[Phone WS] Connected!');
     setWsStatus('✅ Đã kết nối WebSocket', 'ok');
     setMsg('Bấm "Cấp quyền" để bật camera.', 'info');
 
@@ -1543,13 +1566,11 @@ function runPhoneMode(roomId, token){
     }
   };
 
-  wsState.socket.onerror = function(err){
-    console.error('[Phone WS] Error:', err);
+  wsState.socket.onerror = function(){
     setWsStatus('❌ Lỗi WebSocket.', 'err');
   };
 
-  wsState.socket.onclose = function(ev){
-    console.log('[Phone WS] Closed:', ev.code);
+  wsState.socket.onclose = function(){
     setWsStatus('⚠️ Mất kết nối WebSocket', 'err');
   };
 
