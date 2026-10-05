@@ -248,12 +248,11 @@ h2,h3{font-size:.98rem}
     </div>
   </div>
 
-  <!-- ========== STEP CROP ========== -->
+  <!-- STEP CROP -->
   <div id="stepCrop" style="display:none">
     <h3>Bước 2: Cắt ảnh — Chỉ giữ dải giấy quỳ</h3>
     <div class="alert alert-info">
       💡 <b>Kéo chuột</b> (máy tính) hoặc <b>chạm và kéo</b> (điện thoại) để chọn vùng ảnh cần giữ.
-      Chỉ cần giữ lại dải giấy quỳ, bỏ viền xung quanh để phân tích chính xác hơn.
     </div>
 
     <div style="text-align:center">
@@ -276,7 +275,7 @@ h2,h3{font-size:.98rem}
     <button class="btn secondary" onclick="goStep(1)" style="margin-top:8px">← Quay lại chụp</button>
   </div>
 
-  <!-- ========== STEP CHỌN MÀU ========== -->
+  <!-- STEP CHỌN MÀU -->
   <div id="step2" style="display:none">
     <h3>Bước 3: Chạm vào dải màu để chọn</h3>
     <canvas id="cropCanvas"></canvas>
@@ -296,7 +295,7 @@ h2,h3{font-size:.98rem}
     <button class="btn primary" onclick="analyze()">🧪 Phân tích pH</button>
   </div>
 
-  <!-- ========== STEP KẾT QUẢ ========== -->
+  <!-- STEP KẾT QUẢ -->
   <div id="step4" style="display:none">
     <h3>Kết quả phân tích</h3>
     <div class="gauge-wrap">
@@ -329,43 +328,10 @@ h2,h3{font-size:.98rem}
       </div>
     </div>
 
-    <div class="card" style="border:2px solid #10b981">
-      <h4>💾 Lưu vào nhật ký</h4>
-      <label>📍 Tên vườn / Lô đất
-        <select id="saveFarm">
-          <option value="Vườn A - Ri6">Vườn A - Ri6</option>
-          <option value="Vườn B - Thái">Vườn B - Thái</option>
-          <option value="Vườn C - Musang">Vườn C - Musang</option>
-          <option value="Vườn D - Monthong">Vườn D - Monthong</option>
-          <option value="Lô khác">Lô khác (tự nhập)</option>
-        </select>
-      </label>
-      <label id="customFarmWrap" style="display:none">✏️ Nhập tên lô
-        <input type="text" id="customFarm" placeholder="VD: Vườn E - Ri6">
-      </label>
-      <label>🌡️ Nhiệt độ đất (°C)
-        <input type="number" id="saveTemp" placeholder="VD: 27" step="0.1">
-      </label>
-      <label>💧 Độ ẩm đất (%)
-        <input type="number" id="saveHumidity" placeholder="VD: 65" step="0.1">
-      </label>
-      <label>📝 Ghi chú
-        <textarea id="saveNote" placeholder="VD: Đo sau khi bón vôi đợt 1..."></textarea>
-      </label>
-      <button class="btn primary big" onclick="saveLog()">💾 Lưu bản ghi này</button>
-    </div>
+    <!-- PHƯƠNG ÁN CẢI TẠO -->
+    <div id="recommend" class="card" style="border:2px solid #10b981;background:#f0fdf4;padding:16px"></div>
 
-    <div class="card">
-      <h4>🧮 Tính lượng vôi cần bón</h4>
-      <label>Diện tích vườn (m²) <input type="number" id="areaInput" value="1000"></label>
-      <label>Số gốc sầu riêng <input type="number" id="treeInput" value="50"></label>
-      <label>Bán kính tán (m) <input type="number" id="radiusInput" value="2.5" step="0.1"></label>
-      <button class="btn primary" onclick="calcLime()">Tính lượng vôi</button>
-      <div id="limeResult" class="result-box">Nhập thông số và bấm Tính.</div>
-    </div>
-
-    <div id="recommend" class="recommend"></div>
-    <button class="btn secondary" onclick="resetScan()">🔄 Đo lại</button>
+    <button class="btn secondary big" onclick="resetScan()" style="margin-top:12px">🔄 Đo mẫu khác</button>
   </div>
 </section>
 
@@ -442,10 +408,9 @@ h2,h3{font-size:.98rem}
       <li>Sau khi chụp, màn hình chuyển sang bước <b>2. Crop</b></li>
       <li><b>Máy tính:</b> click + giữ chuột trái → kéo từ góc này sang góc kia</li>
       <li><b>Điện thoại:</b> chạm 1 ngón + kéo từ từ</li>
-      <li>Vùng chọn có viền xanh + grid 3×3 để canh chỉnh</li>
+      <li>Vùng chọn có viền xanh + grid 3×3</li>
       <li>Chỉ giữ <b>dải giấy quỳ</b>, bỏ viền thừa</li>
-      <li>Bấm <b>✅ Xác nhận crop</b> để cắt, hoặc <b>↺ Chọn lại</b> nếu lỡ tay</li>
-      <li>Nếu ảnh đã đẹp sẵn, bấm <b>⏭️ Bỏ qua</b> để dùng ảnh gốc</li>
+      <li>Bấm <b>✅ Xác nhận crop</b> hoặc <b>↺ Chọn lại</b></li>
     </ol>
   </details>
   <details class="accordion">
@@ -478,13 +443,13 @@ h2,h3{font-size:.98rem}
     </ol>
   </details>
   <details class="accordion">
-    <summary>💾 Cách lưu nhật ký</summary>
+    <summary>📊 Đọc kết quả & phương án cải tạo</summary>
     <ol>
-      <li>Đo pH xong → xuống phần <b>💾 Lưu vào nhật ký</b>.</li>
-      <li>Chọn <b>tên vườn/lô</b>.</li>
-      <li>Nhập <b>nhiệt độ, độ ẩm đất</b> nếu có.</li>
-      <li>Ghi chú tình trạng cây trồng.</li>
-      <li>Vào tab <b>📊 Nhật ký</b> để xem biểu đồ, xuất CSV/PDF.</li>
+      <li>Sau khi phân tích → hiện <b>Phương án cải tạo</b> chi tiết</li>
+      <li>Gồm: <b>Chẩn đoán</b> → <b>Phương án</b> → <b>Lịch trình</b> → <b>Lưu ý</b></li>
+      <li>5 nhóm đất: <b>Chua gắt</b> · <b>Chua</b> · <b>Tối ưu</b> · <b>Hơi kiềm</b> · <b>Kiềm</b></li>
+      <li>Mỗi nhóm có khuyến nghị bón vôi, hữu cơ, vi chất riêng</li>
+      <li>Xem thêm ở tab <b>📚 Hướng dẫn</b></li>
     </ol>
   </details>
   <details class="accordion">
@@ -512,7 +477,6 @@ h2,h3{font-size:.98rem}
     <div id="modalContent"></div>
     <div class="row-btns">
       <button class="btn secondary" onclick="closeModal()">Đóng</button>
-      <button class="btn primary" id="editNoteBtn">✏️ Sửa ghi chú</button>
       <button class="btn danger" id="deleteFromModalBtn">🗑️ Xóa</button>
     </div>
   </div>
