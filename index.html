@@ -6,13 +6,16 @@
 <title>DurianSoil pH-Vision</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-<script src="https://unpkg.com/piesocket-js@7"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f9fafb;color:#111827;line-height:1.5;padding-bottom:40px}
-.header{background:#10b981;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+.header{background:#10b981;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:6px}
 .header b{font-size:1rem}
 #onlineStatus{font-size:.8rem;background:rgba(255,255,255,.2);padding:4px 10px;border-radius:20px}
+#wsStatus{font-size:.72rem;padding:3px 8px;border-radius:10px;font-weight:700;display:inline-block;margin-left:6px}
+#wsStatus.connected{background:#d1fae5;color:#065f46}
+#wsStatus.connecting{background:#fef3c7;color:#92400e}
+#wsStatus.disconnected{background:#fee2e2;color:#991b1b}
 .tabs{display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:56px;z-index:99}
 .tab{flex:1;min-width:90px;padding:12px 8px;border:none;background:none;font-size:.8rem;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
 .tab.active{color:#047857;border-bottom-color:#10b981}
@@ -48,7 +51,7 @@ h4{color:#047857;margin:8px 0;font-size:.95rem}
 .swatch-row{display:flex;gap:10px;align-items:center;margin-top:8px}
 .swatch{width:44px;height:44px;border-radius:8px;border:2px solid #e5e7eb;background:#ddd}
 .steps{display:flex;gap:4px;margin-bottom:12px}
-.step{flex:1;text-align:center;padding:7px 4px;font-size:.75rem;font-weight:600;background:#f3f4f6;color:#6b7280;border-radius:8px}
+.step{flex:1;text-align:center;padding:7px 4px;font-size:.72rem;font-weight:600;background:#f3f4f6;color:#6b7280;border-radius:8px}
 .step.active{background:#10b981;color:#fff}
 .gauge-wrap{text-align:center;margin:20px 0}
 .gauge{width:160px;height:160px;margin:0 auto;border-radius:50%;background:conic-gradient(#ef4444 0deg 60deg,#f59e0b 60deg 120deg,#10b981 120deg 240deg,#3b82f6 240deg 360deg);display:flex;align-items:center;justify-content:center;position:relative}
@@ -119,10 +122,7 @@ label input:focus,label select:focus,label textarea:focus{outline:2px solid #10b
 @keyframes popIn{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
 #receivedPhotoImg{max-width:100%;max-height:400px;border-radius:8px;display:block;margin:0 auto;box-shadow:0 2px 10px rgba(0,0,0,.15)}
 #autoStepCountdown{display:inline-block;min-width:20px;padding:2px 6px;background:#10b981;color:#fff;border-radius:10px;font-weight:800;text-align:center}
-#wsStatus{font-size:.72rem;padding:3px 8px;border-radius:10px;font-weight:700;display:inline-block;margin-left:6px}
-#wsStatus.connected{background:#d1fae5;color:#065f46}
-#wsStatus.connecting{background:#fef3c7;color:#92400e}
-#wsStatus.disconnected{background:#fee2e2;color:#991b1b}
+#cropSelectCanvas{max-width:100%;border-radius:12px;cursor:crosshair;touch-action:none;display:block;margin:0 auto;box-shadow:0 2px 10px rgba(0,0,0,.15)}
 @media(max-width:480px){
 h2,h3{font-size:.98rem}
 .btn{font-size:.85rem;padding:10px 14px}
@@ -130,6 +130,7 @@ h2,h3{font-size:.98rem}
 #phValue{font-size:2rem}
 .gauge{width:140px;height:140px}
 .gauge-inner{width:104px;height:104px}
+.step{font-size:.65rem;padding:6px 2px}
 }
 </style>
 </head>
@@ -177,8 +178,9 @@ h2,h3{font-size:.98rem}
 <section id="scan" class="tab-content">
   <div class="steps">
     <div class="step active">1. Chụp</div>
-    <div class="step">2. Chọn màu</div>
-    <div class="step">3. Kết quả</div>
+    <div class="step">2. Crop</div>
+    <div class="step">3. Chọn màu</div>
+    <div class="step">4. Kết quả</div>
   </div>
 
   <div id="step1">
@@ -193,11 +195,11 @@ h2,h3{font-size:.98rem}
         <img id="receivedPhotoImg" alt="Ảnh từ điện thoại">
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn primary big" id="useReceivedPhotoBtn" style="flex:1;margin:0">✅ Dùng ảnh này — Chọn màu</button>
+        <button class="btn primary big" id="useReceivedPhotoBtn" style="flex:1;margin:0">✅ Dùng ảnh này — Crop</button>
         <button class="btn secondary" id="retakePhotoBtn" style="margin:0">🔄 Chụp lại</button>
       </div>
       <div class="alert alert-info" style="margin-top:10px">
-        💡 Tự động chuyển sang bước chọn màu sau <b id="autoStepCountdown">5</b> giây...
+        💡 Tự động chuyển sang bước crop sau <b id="autoStepCountdown">5</b> giây...
       </div>
     </div>
 
@@ -246,8 +248,37 @@ h2,h3{font-size:.98rem}
     </div>
   </div>
 
+  <!-- ========== STEP CROP ========== -->
+  <div id="stepCrop" style="display:none">
+    <h3>Bước 2: Cắt ảnh — Chỉ giữ dải giấy quỳ</h3>
+    <div class="alert alert-info">
+      💡 <b>Kéo chuột</b> (máy tính) hoặc <b>chạm và kéo</b> (điện thoại) để chọn vùng ảnh cần giữ.
+      Chỉ cần giữ lại dải giấy quỳ, bỏ viền xung quanh để phân tích chính xác hơn.
+    </div>
+
+    <div style="text-align:center">
+      <canvas id="cropSelectCanvas"></canvas>
+    </div>
+
+    <div class="info-box" style="margin-top:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.85rem">
+        <div>📐 Vùng chọn: <b id="cropSizeInfo">—</b></div>
+        <div>🎯 Vị trí: <b id="cropPosInfo">—</b></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn primary big" id="confirmCropBtn" style="flex:1;margin:0" disabled>✅ Xác nhận crop</button>
+      <button class="btn secondary" id="resetCropBtn" style="margin:0">↺ Chọn lại</button>
+      <button class="btn secondary" id="skipCropBtn" style="margin:0">⏭️ Bỏ qua</button>
+    </div>
+
+    <button class="btn secondary" onclick="goStep(1)" style="margin-top:8px">← Quay lại chụp</button>
+  </div>
+
+  <!-- ========== STEP CHỌN MÀU ========== -->
   <div id="step2" style="display:none">
-    <h3>Bước 2: Chạm vào dải màu để chọn</h3>
+    <h3>Bước 3: Chạm vào dải màu để chọn</h3>
     <canvas id="cropCanvas"></canvas>
     <div class="info-box">
       <div>Vị trí: <b id="pickPos">—</b></div>
@@ -261,11 +292,12 @@ h2,h3{font-size:.98rem}
       </div>
     </div>
     <div class="alert alert-info">💡 Thuật toán đã tự động cân bằng trắng và lấy mẫu 5×5 điểm để giảm nhiễu.</div>
-    <button class="btn secondary" onclick="goStep(1)">← Quay lại</button>
+    <button class="btn secondary" onclick="goStep(2)">← Quay lại crop</button>
     <button class="btn primary" onclick="analyze()">🧪 Phân tích pH</button>
   </div>
 
-  <div id="step3" style="display:none">
+  <!-- ========== STEP KẾT QUẢ ========== -->
+  <div id="step4" style="display:none">
     <h3>Kết quả phân tích</h3>
     <div class="gauge-wrap">
       <div class="gauge">
@@ -405,22 +437,33 @@ h2,h3{font-size:.98rem}
 <section id="guide" class="tab-content">
   <h3>📚 Hướng dẫn</h3>
   <details open class="accordion">
-    <summary>📡 WebSocket PieSocket — Cách hoạt động</summary>
+    <summary>✂️ Cách crop ảnh chính xác</summary>
     <ol>
-      <li><b>Máy tính</b> mở app → bấm <b>📱 Kết nối Camera điện thoại</b></li>
-      <li>App tạo <b>room ID</b> ngẫu nhiên, hiện mã QR</li>
+      <li>Sau khi chụp, màn hình chuyển sang bước <b>2. Crop</b></li>
+      <li><b>Máy tính:</b> click + giữ chuột trái → kéo từ góc này sang góc kia</li>
+      <li><b>Điện thoại:</b> chạm 1 ngón + kéo từ từ</li>
+      <li>Vùng chọn có viền xanh + grid 3×3 để canh chỉnh</li>
+      <li>Chỉ giữ <b>dải giấy quỳ</b>, bỏ viền thừa</li>
+      <li>Bấm <b>✅ Xác nhận crop</b> để cắt, hoặc <b>↺ Chọn lại</b> nếu lỡ tay</li>
+      <li>Nếu ảnh đã đẹp sẵn, bấm <b>⏭️ Bỏ qua</b> để dùng ảnh gốc</li>
+    </ol>
+  </details>
+  <details class="accordion">
+    <summary>📡 WebSocket PieSocket — Kết nối camera điện thoại</summary>
+    <ol>
+      <li><b>Máy tính</b> bấm <b>📱 Kết nối Camera điện thoại</b></li>
+      <li>App tạo room, hiện mã QR (hiệu lực 3 phút)</li>
       <li><b>Điện thoại</b> quét QR → tự động join cùng room</li>
       <li>Điện thoại chụp → gửi ảnh qua WebSocket → máy tính nhận ngay</li>
       <li><b>Không cần cùng WiFi!</b> Điện thoại dùng 4G vẫn được</li>
     </ol>
   </details>
   <details class="accordion">
-    <summary>🎥 Cách cấp quyền Camera</summary>
+    <summary>🎥 Cấp quyền Camera</summary>
     <ol>
-      <li><b>Máy tính:</b> Vào tab <b>📸 Đo pH</b> → box <b>🎥 Quyền Camera</b> → bấm <b>🔐 Cấp quyền Camera</b> → chọn <b>Cho phép / Allow</b>.</li>
-      <li><b>Nếu bị chặn:</b> Bấm 🔒 trên thanh địa chỉ → Site settings → Camera → Allow → F5.</li>
-      <li><b>Điện thoại:</b> Sau khi quét QR, bấm <b>🔐 Cấp quyền</b> trên trang chụp ảnh.</li>
-      <li><b>Lưu ý:</b> Chrome cho phép camera khi dùng <b>HTTPS</b> (GitHub Pages đã có sẵn).</li>
+      <li><b>Máy tính:</b> box <b>🎥 Quyền Camera</b> → bấm <b>🔐 Cấp quyền Camera</b> → <b>Cho phép</b>.</li>
+      <li><b>Điện thoại:</b> bấm <b>🔐 Cấp quyền</b> sau khi quét QR.</li>
+      <li>Chrome yêu cầu <b>HTTPS</b> — GitHub Pages đã có sẵn.</li>
     </ol>
   </details>
   <details class="accordion">
