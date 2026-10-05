@@ -6,10 +6,6 @@ function toast(msg){
   var t=$('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},2200);
 }
-function escapeHtml(s){
-  if(!s)return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 function classifyPH(ph){
   if(ph<5.5)return{status:'Chua',cls:'status-chua',color:'#ef4444'};
   if(ph<=6.5)return{status:'Tối ưu',cls:'status-toiuu',color:'#10b981'};
@@ -107,9 +103,6 @@ function deltaE2000(lab1,lab2){
   return dE;
 }
 
-/* ============================================================
-   AUTO WHITE BALANCE
-   ============================================================ */
 function autoWhiteBalance(imgData){
   var data=imgData.data;
   var sumR=0,sumG=0,sumB=0,n=0;
@@ -125,9 +118,6 @@ function autoWhiteBalance(imgData){
   return {scaleR:scaleR, scaleG:scaleG, scaleB:scaleB};
 }
 
-/* ============================================================
-   LẤY MẪU 5x5 + IQR
-   ============================================================ */
 function sampleColors(imgData, cx, cy, size){
   var data=imgData.data;
   var w=imgData.width;
@@ -144,7 +134,6 @@ function sampleColors(imgData, cx, cy, size){
   var rs=samples.map(function(s){return s.r;}).sort(function(a,b){return a-b;});
   var gs=samples.map(function(s){return s.g;}).sort(function(a,b){return a-b;});
   var bs=samples.map(function(s){return s.b;}).sort(function(a,b){return a-b;});
-
   function iqrRange(arr){
     var q1=arr[Math.floor(arr.length*0.25)];
     var q3=arr[Math.floor(arr.length*0.75)];
@@ -152,7 +141,6 @@ function sampleColors(imgData, cx, cy, size){
     return {lo:q1-1.5*iqr, hi:q3+1.5*iqr};
   }
   var rr=iqrRange(rs), gr=iqrRange(gs), br=iqrRange(bs);
-
   var sumR=0,sumG=0,sumB=0,cnt=0;
   for(var i=0;i<samples.length;i++){
     var s=samples[i];
@@ -164,9 +152,6 @@ function sampleColors(imgData, cx, cy, size){
   return{r:Math.round(sumR/cnt),g:Math.round(sumG/cnt),b:Math.round(sumB/cnt),count:cnt};
 }
 
-/* ============================================================
-   pH ESTIMATION
-   ============================================================ */
 function estimatePHAdvanced(correctedRGB, originalRGB){
   var lab=rgb2lab(correctedRGB.r, correctedRGB.g, correctedRGB.b);
   var deltas=[];
@@ -251,8 +236,6 @@ function showTab(name){
     tabs[j].classList.toggle('active',tabs[j].getAttribute('data-tab')===name);
   }
   if(name==='home')renderHome();
-  if(name==='log')renderLog();
-  if(name==='admin'){renderRefGrid();renderSamples();loadCoef();}
   if(name!=='scan'){
     if(typeof stopCameraStream==='function') stopCameraStream();
     if(typeof stopQRTimer==='function'){
@@ -599,7 +582,6 @@ $('fileHome').addEventListener('change',handleFile);
    STEPS
    ============================================================ */
 function goStep(n){
-  // 1=chụp, 2=crop, 3=chọn màu, 4=kết quả
   $('step1').style.display=(n===1)?'block':'none';
   $('stepCrop').style.display=(n===2)?'block':'none';
   $('step2').style.display=(n===3)?'block':'none';
@@ -902,7 +884,7 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 /* ============================================================
-   CROP CANVAS — Chọn màu (Bước 3)
+   CROP CANVAS — Chọn màu
    ============================================================ */
 function drawCropCanvas(){
   if(!state.image)return;
@@ -979,7 +961,6 @@ function analyze(){
   $('de3').textContent=result.bestDE.toFixed(1);
   $('refMatch').textContent='pH '+result.refMatch.ph;
 
-  // Phương án cải tạo chi tiết
   $('recommend').innerHTML = buildRecommendation(ph, result.confidence, result.lab, result.bestDE, result.refMatch);
 
   goStep(4);
@@ -989,7 +970,6 @@ function analyze(){
    PHƯƠNG ÁN CẢI TẠO CHI TIẾT
    ============================================================ */
 function buildRecommendation(ph, confidence, lab, bestDE, refMatch){
-  // ===== 1. PHÂN LOẠI TÌNH TRẠNG =====
   var group, groupIcon, groupColor, groupTitle;
   if (ph < 5.0) {
     group = 'very-acid';
@@ -1018,25 +998,20 @@ function buildRecommendation(ph, confidence, lab, bestDE, refMatch){
     groupTitle = 'ĐẤT KIỀM';
   }
 
-  // ===== 2. TÍNH LƯỢNG VÔI THAM KHẢO =====
   var targetPH = 5.8;
   var deltaPH = Math.max(0, targetPH - ph);
-  var limePerHa = 0;
   var limePerTree = 0;
   var limePerM2 = 0;
   if (deltaPH > 0) {
-    limePerHa = deltaPH * 1000;
-    limePerM2 = limePerHa / 10000;
-    limePerTree = limePerHa / 200;
+    limePerM2 = deltaPH * 0.1;
+    limePerTree = deltaPH * 5;
   }
 
-  // ===== 3. PHƯƠNG ÁN THEO TỪNG NHÓM =====
   var html = '';
   html += '<h4 style="margin:0 0 12px;color:' + groupColor + ';font-size:1.1rem">';
   html += groupIcon + ' ' + groupTitle + ' — pH ' + ph.toFixed(1);
   html += '</h4>';
 
-  // Khối 1: Chẩn đoán
   html += '<div style="background:#fff;padding:12px;border-radius:8px;margin-bottom:10px;border-left:4px solid ' + groupColor + '">';
   html += '<div style="font-weight:700;font-size:.9rem;margin-bottom:6px">🔍 Chẩn đoán</div>';
   html += '<div style="font-size:.85rem;line-height:1.6">';
@@ -1061,7 +1036,6 @@ function buildRecommendation(ph, confidence, lab, bestDE, refMatch){
   }
   html += '</div></div>';
 
-  // Khối 2: Phương án cải tạo
   html += '<div style="background:#fff;padding:12px;border-radius:8px;margin-bottom:10px;border-left:4px solid #f59e0b">';
   html += '<div style="font-weight:700;font-size:.9rem;margin-bottom:8px">🛠️ Phương án cải tạo</div>';
 
@@ -1119,7 +1093,6 @@ function buildRecommendation(ph, confidence, lab, bestDE, refMatch){
   }
   html += '</div>';
 
-  // Khối 3: Lịch trình
   html += '<div style="background:#fff;padding:12px;border-radius:8px;margin-bottom:10px;border-left:4px solid #3b82f6">';
   html += '<div style="font-weight:700;font-size:.9rem;margin-bottom:8px">📅 Lịch trình đề xuất</div>';
   html += '<div style="font-size:.85rem;line-height:1.7">';
@@ -1145,7 +1118,6 @@ function buildRecommendation(ph, confidence, lab, bestDE, refMatch){
   }
   html += '</div></div>';
 
-  // Khối 4: Lưu ý
   html += '<div style="background:#fef3c7;padding:12px;border-radius:8px;border-left:4px solid #f59e0b">';
   html += '<div style="font-weight:700;font-size:.9rem;margin-bottom:6px">⚠️ Lưu ý quan trọng</div>';
   html += '<div style="font-size:.82rem;line-height:1.7">';
@@ -1168,7 +1140,6 @@ function buildRecommendation(ph, confidence, lab, bestDE, refMatch){
   }
   html += '</div></div>';
 
-  // Khối 5: Chất lượng phân tích
   var confLabel = confidence >= 80 ? '🟢 Cao' : confidence >= 60 ? '🟡 Khá' : confidence >= 40 ? '🟠 Trung bình' : '🔴 Thấp';
   html += '<div style="background:#eff6ff;padding:10px;border-radius:8px;border-left:4px solid #3b82f6;font-size:.8rem;margin-top:10px">';
   html += '<b>📊 Chất lượng phân tích:</b> ' + confLabel + ' (' + confidence + '%) · ';
@@ -1188,367 +1159,6 @@ function renderHome(){
   $('todayDate').textContent=new Date().toLocaleDateString('vi-VN',{
     weekday:'long',year:'numeric',month:'long',day:'numeric'
   });
-  var logs=getLogs();
-  $('totalScans').textContent=logs.length;
-  if(logs.length){
-    var last=logs[0];
-    $('lastPH').textContent=last.ph.toFixed(1);
-    $('lastPHStatus').textContent=last.status+' · '+last.farm;
-    $('lastPHStatus').style.color=classifyPH(last.ph).color;
-  }
-  var recent=logs.slice(0,5);
-  var box=$('recentList');
-  if(!recent.length){box.innerHTML='<p class="empty">Chưa có dữ liệu</p>';return;}
-  var html='';
-  for(var i=0;i<recent.length;i++){
-    var l=recent[i];
-    html+='<div class="recent-item" onclick="viewLog('+l.id+')"><div>'+
-      '<div style="font-weight:700">'+escapeHtml(l.farm)+'</div>'+
-      '<div class="muted" style="font-size:.75rem">'+new Date(l.time).toLocaleString('vi-VN')+'</div>'+
-      '</div><div class="ph" style="color:'+classifyPH(l.ph).color+'">'+l.ph.toFixed(1)+'</div></div>';
-  }
-  box.innerHTML=html;
-}
-
-/* ============================================================
-   LOG TAB (xem dữ liệu cũ)
-   ============================================================ */
-function getLogs(){
-  try{return JSON.parse(localStorage.getItem('dsp_logs'))||[];}
-  catch(e){return[];}
-}
-
-function renderLog(){
-  var logs=getLogs();
-  var filter=$('filterVuon').value;
-  var search=$('searchBox').value.trim().toLowerCase();
-  var filtered=logs.filter(function(l){
-    if(filter!=='all' && l.farm!==filter)return false;
-    if(search){
-      var text=(l.farm+' '+(l.note||'')).toLowerCase();
-      if(text.indexOf(search)===-1)return false;
-    }
-    return true;
-  });
-  var farms={};
-  for(var i=0;i<logs.length;i++)farms[logs[i].farm]=1;
-  var sel=$('filterVuon');
-  var cur=sel.value;
-  sel.innerHTML='<option value="all">Tất cả vườn</option>';
-  for(var f in farms){
-    var o=document.createElement('option');
-    o.value=f;o.textContent=f;
-    sel.appendChild(o);
-  }
-  sel.value=cur==='all'||farms[cur]?'all':cur;
-  if(farms[cur])sel.value=cur;
-  var tbody=$('logBody');
-  if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="6" class="empty">Chưa có dữ liệu</td></tr>';
-  }else{
-    var html='';
-    for(var j=0;j<filtered.length;j++){
-      var l=filtered[j];
-      var info=classifyPH(l.ph);
-      var conf=l.confidence||0;
-      var confColor=conf>=80?'#10b981':conf>=60?'#f59e0b':'#ef4444';
-      html+='<tr>'+
-        '<td>'+new Date(l.time).toLocaleString('vi-VN')+'</td>'+
-        '<td>'+escapeHtml(l.farm)+'</td>'+
-        '<td><b>'+l.ph.toFixed(1)+'</b></td>'+
-        '<td><span style="color:'+confColor+';font-weight:700">'+conf+'%</span></td>'+
-        '<td><span class="status-badge '+info.cls+'" style="padding:3px 10px;font-size:.72rem">'+l.status+'</span></td>'+
-        '<td><span class="view" onclick="viewLog('+l.id+')">👁️</span> <span class="del" onclick="deleteLog('+l.id+')">✕</span></td>'+
-        '</tr>';
-    }
-    tbody.innerHTML=html;
-  }
-  drawChart(filtered);
-}
-
-$('searchBox').addEventListener('input',renderLog);
-$('filterVuon').addEventListener('change',renderLog);
-
-function viewLog(id){
-  var logs=getLogs();
-  var log=null;
-  for(var i=0;i<logs.length;i++)if(logs[i].id===id){log=logs[i];break;}
-  if(!log){toast('Không tìm thấy');return;}
-  var info=classifyPH(log.ph);
-  var html='';
-  if(log.image) html+='<img class="modal-img" src="'+log.image+'" alt="Ảnh mẫu">';
-  html+='<div class="modal-detail">';
-  html+='<div><b>Thời gian:</b> '+new Date(log.time).toLocaleString('vi-VN')+'</div>';
-  html+='<div><b>Vườn:</b> '+escapeHtml(log.farm)+'</div>';
-  html+='<div><b>pH:</b> <span style="color:'+info.color+';font-size:1.2rem;font-weight:800">'+log.ph.toFixed(1)+'</span> ('+log.status+')</div>';
-  if(log.confidence)html+='<div><b>Độ tin cậy:</b> '+log.confidence+'%</div>';
-  if(log.note)html+='<div><b>Ghi chú:</b> '+escapeHtml(log.note)+'</div>';
-  html+='</div>';
-  $('modalContent').innerHTML=html;
-  $('deleteFromModalBtn').onclick=function(){
-    closeModal();
-    deleteLog(id);
-  };
-  $('modalBg').classList.add('show');
-}
-
-function closeModal(){ $('modalBg').classList.remove('show'); }
-
-function deleteLog(id){
-  if(!confirm('Xóa bản ghi này?'))return;
-  var logs=getLogs().filter(function(l){return l.id!==id;});
-  localStorage.setItem('dsp_logs',JSON.stringify(logs));
-  renderLog();renderHome();
-  toast('🗑️ Đã xóa');
-}
-
-function clearLog(){
-  if(!confirm('Xóa TOÀN BỘ nhật ký? Không thể hoàn tác!'))return;
-  localStorage.removeItem('dsp_logs');
-  renderLog();renderHome();
-  toast('🗑️ Đã xóa tất cả');
-}
-
-/* ============================================================
-   EXPORT
-   ============================================================ */
-function exportCSV(){
-  var logs=getLogs();
-  if(!logs.length){toast('Không có dữ liệu');return;}
-  var rows=[['Thoi gian','Vuon','pH','Trang thai','Do tin cay','Ghi chu']];
-  for(var i=0;i<logs.length;i++){
-    var l=logs[i];
-    rows.push([
-      '"'+new Date(l.time).toLocaleString('vi-VN')+'"',
-      '"'+l.farm+'"',l.ph.toFixed(1),l.status,(l.confidence||0)+'%',
-      '"'+(l.note||'').replace(/"/g,'""')+'"'
-    ]);
-  }
-  var csv='\uFEFF'+rows.map(function(r){return r.join(',');}).join('\n');
-  downloadBlob(csv,'duriansoil_log.csv','text/csv;charset=utf-8');
-  toast('⬇️ Đã xuất CSV');
-}
-
-function exportJSON(){
-  var logs=getLogs();
-  if(!logs.length){toast('Không có dữ liệu');return;}
-  var data={
-    version:'1.0',exported:new Date().toISOString(),
-    logs:logs,coefficients:state.coefficients,refColors:state.refColors
-  };
-  downloadBlob(JSON.stringify(data,null,2),'duriansoil_backup.json','application/json');
-  toast('💾 Đã xuất backup');
-}
-
-function exportPDF(){
-  var logs=getLogs();
-  if(!logs.length){toast('Không có dữ liệu');return;}
-  var filter=$('filterVuon').value;
-  var filtered=filter==='all'?logs:logs.filter(function(l){return l.farm===filter;});
-  var w=window.open('','_blank');
-  var rowsHtml='';
-  for(var i=0;i<filtered.length;i++){
-    var l=filtered[i];
-    var color=classifyPH(l.ph).color;
-    rowsHtml+='<tr><td>'+(i+1)+'</td><td>'+new Date(l.time).toLocaleString('vi-VN')+'</td><td>'+escapeHtml(l.farm)+'</td><td style="color:'+color+';font-weight:700">'+l.ph.toFixed(1)+'</td><td>'+l.status+'</td><td>'+((l.confidence||0))+'%</td><td>'+escapeHtml(l.note||'')+'</td></tr>';
-  }
-  var printTag='<'+'script>window.onload=function(){setTimeout(function(){window.print();},400)}<'+'/script>';
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nhật ký pH</title><style>body{font-family:Arial;padding:24px;color:#111}h1{color:#047857;border-bottom:3px solid #10b981;padding-bottom:8px}.meta{color:#6b7280;font-size:13px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#10b981;color:#fff}tr:nth-child(even){background:#f9fafb}.footer{margin-top:20px;font-size:11px;color:#6b7280;text-align:center}</style></head><body>'+
-    '<h1>🌱 Nhật ký đo pH đất sầu riêng</h1>'+
-    '<div class="meta">'+
-    '<div><b>Ứng dụng:</b> DurianSoil pH-Vision</div>'+
-    '<div><b>Xuất ngày:</b> '+new Date().toLocaleString('vi-VN')+'</div>'+
-    '<div><b>Vườn:</b> '+(filter==='all'?'Tất cả':escapeHtml(filter))+'</div>'+
-    '<div><b>Tổng số mẫu:</b> '+filtered.length+'</div>'+
-    '</div>'+
-    '<table><thead><tr><th>#</th><th>Thời gian</th><th>Vườn</th><th>pH</th><th>Trạng thái</th><th>Tin cậy</th><th>Ghi chú</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
-    '<div class="footer">Báo cáo tự động từ DurianSoil pH-Vision</div>'+printTag+'</body></html>';
-  w.document.write(html);
-  w.document.close();
-  toast('📄 Đang mở hộp thoại in PDF...');
-}
-
-function downloadBlob(content,name,type){
-  var blob=new Blob([content],{type:type});
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=name;
-  a.click();
-  setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
-}
-
-/* ============================================================
-   IMPORT JSON
-   ============================================================ */
-$('importJSON').addEventListener('change',function(e){
-  var file=e.target.files[0];
-  if(!file)return;
-  var reader=new FileReader();
-  reader.onload=function(ev){
-    try{
-      var data=JSON.parse(ev.target.result);
-      if(!data.logs||!Array.isArray(data.logs))throw new Error('File không hợp lệ');
-      if(!confirm('Phục hồi '+data.logs.length+' bản ghi?'))return;
-      localStorage.setItem('dsp_logs',JSON.stringify(data.logs));
-      if(data.coefficients)localStorage.setItem('dsp_coef',JSON.stringify(data.coefficients));
-      if(data.refColors){
-        state.refColors=data.refColors;
-        localStorage.setItem('dsp_ref',JSON.stringify(data.refColors));
-      }
-      renderLog();renderHome();renderRefGrid();
-      toast('✅ Đã phục hồi');
-    }catch(err){
-      toast('❌ Lỗi: '+err.message);
-    }
-  };
-  reader.readAsText(file);
-  e.target.value='';
-});
-
-/* ============================================================
-   CHART
-   ============================================================ */
-var chart=null;
-function drawChart(logs){
-  if(typeof Chart==='undefined')return;
-  var ctx=$('phChart').getContext('2d');
-  if(chart)chart.destroy();
-  var sorted=logs.slice().reverse();
-  if(!sorted.length){
-    chart=new Chart(ctx,{type:'line',data:{labels:['Chưa có'],datasets:[{label:'pH',data:[],borderColor:'#10b981'}]},options:{responsive:true,maintainAspectRatio:false}});
-    return;
-  }
-  var labels=[],data=[],colors=[];
-  for(var i=0;i<sorted.length;i++){
-    labels.push(new Date(sorted[i].time).toLocaleDateString('vi-VN'));
-    data.push(sorted[i].ph);
-    colors.push(classifyPH(sorted[i].ph).color);
-  }
-  chart=new Chart(ctx,{
-    type:'line',
-    data:{
-      labels:labels,
-      datasets:[{
-        label:'pH đất',data:data,
-        borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.12)',
-        tension:0.3,fill:true,pointRadius:5,
-        pointBackgroundColor:colors,
-        pointBorderColor:'#fff',pointBorderWidth:2
-      }]
-    },
-    options:{responsive:true,maintainAspectRatio:false,
-      scales:{y:{min:3.5,max:8,ticks:{stepSize:1}}},
-      plugins:{legend:{display:false}}
-    }
-  });
-}
-
-/* ============================================================
-   ADMIN
-   ============================================================ */
-function renderRefGrid(){
-  var html='';
-  for(var i=0;i<state.refColors.length;i++){
-    var c=state.refColors[i];
-    var lum=c.r*0.299+c.g*0.587+c.b*0.114;
-    html+='<div class="ref-item" data-idx="'+i+'" style="background:rgb('+c.r+','+c.g+','+c.b+');color:'+(lum>128?'#111':'#fff')+'" onclick="editRef('+i+')">pH '+c.ph+'</div>';
-  }
-  $('refGrid').innerHTML=html;
-}
-
-function editRef(idx){
-  var c=state.refColors[idx];
-  var r=prompt('Màu chuẩn pH '+c.ph+'\nNhập R (0-255):',c.r);
-  if(r===null)return;
-  var g=prompt('Nhập G (0-255):',c.g);
-  if(g===null)return;
-  var b=prompt('Nhập B (0-255):',c.b);
-  if(b===null)return;
-  c.r=Math.max(0,Math.min(255,parseInt(r)||c.r));
-  c.g=Math.max(0,Math.min(255,parseInt(g)||c.g));
-  c.b=Math.max(0,Math.min(255,parseInt(b)||c.b));
-  localStorage.setItem('dsp_ref',JSON.stringify(state.refColors));
-  renderRefGrid();
-  toast('✅ Đã cập nhật màu pH '+c.ph);
-}
-
-function loadCoef(){
-  try{
-    var saved=JSON.parse(localStorage.getItem('dsp_coef'));
-    if(saved&&typeof saved.a==='number')state.coefficients=saved;
-    var savedRef=JSON.parse(localStorage.getItem('dsp_ref'));
-    if(savedRef&&Array.isArray(savedRef)&&savedRef.length)state.refColors=savedRef;
-  }catch(e){}
-  $('coefA').value=state.coefficients.a;
-  $('coefB').value=state.coefficients.b;
-  $('coefC').value=state.coefficients.c;
-  $('coefD').value=state.coefficients.d;
-  $('coefE').value=state.coefficients.e;
-}
-function saveCoef(){
-  state.coefficients={
-    a:parseFloat($('coefA').value)||0,
-    b:parseFloat($('coefB').value)||0,
-    c:parseFloat($('coefC').value)||0,
-    d:parseFloat($('coefD').value)||0,
-    e:parseFloat($('coefE').value)||0
-  };
-  localStorage.setItem('dsp_coef',JSON.stringify(state.coefficients));
-  toast('💾 Đã lưu hệ số');
-}
-function resetCoef(){
-  state.coefficients={a:0.012,b:-0.015,c:0.008,d:0.025,e:3.5};
-  localStorage.removeItem('dsp_coef');
-  loadCoef();
-  toast('↺ Đã khôi phục mặc định');
-}
-
-/* ============================================================
-   SAMPLES
-   ============================================================ */
-function getSamples(){
-  try{return JSON.parse(localStorage.getItem('dsp_samples'))||[];}
-  catch(e){return[];}
-}
-function renderSamples(){
-  var samples=getSamples();
-  var tbody=$('sampleBody');
-  if(!samples.length){
-    tbody.innerHTML='<tr><td colspan="5" class="empty">Chưa có mẫu</td></tr>';
-    $('rmseValue').textContent='—';
-    return;
-  }
-  var sumSq=0,html='';
-  for(var i=0;i<samples.length;i++){
-    var s=samples[i];
-    var d=s.app-s.std;
-    sumSq+=d*d;
-    html+='<tr><td>'+(i+1)+'</td><td>'+s.app.toFixed(2)+'</td><td>'+s.std.toFixed(2)+'</td><td style="color:'+(Math.abs(d)<0.3?'#10b981':'#ef4444')+'">'+d.toFixed(2)+'</td><td class="del" onclick="delSample('+i+')">✕</td></tr>';
-  }
-  tbody.innerHTML=html;
-  var rmse=Math.sqrt(sumSq/samples.length);
-  $('rmseValue').textContent=rmse.toFixed(3)+' pH';
-}
-function addSample(){
-  var a=prompt('Nhập pH đo bằng App:');
-  if(a===null)return;
-  var app=parseFloat(a);
-  if(isNaN(app)){toast('Số không hợp lệ');return;}
-  var b=prompt('Nhập pH đo bằng máy chuẩn:');
-  if(b===null)return;
-  var std=parseFloat(b);
-  if(isNaN(std)){toast('Số không hợp lệ');return;}
-  var s=getSamples();
-  s.push({app:app,std:std});
-  localStorage.setItem('dsp_samples',JSON.stringify(s));
-  renderSamples();
-  toast('✅ Đã thêm mẫu');
-}
-function delSample(i){
-  var s=getSamples();
-  s.splice(i,1);
-  localStorage.setItem('dsp_samples',JSON.stringify(s));
-  renderSamples();
 }
 
 /* ============================================================
@@ -2094,9 +1704,5 @@ $('qrCloseBtn').addEventListener('click', function(){
    INIT
    ============================================================ */
 renderHome();
-loadCoef();
-renderRefGrid();
-renderSamples();
 updateStatus();
 initCameraPermission();
-setTimeout(function(){drawChart(getLogs());},500);
