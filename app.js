@@ -33,10 +33,7 @@ function rgb2hsv(r,g,b){
 }
 
 function rgb2xyz(r,g,b){
-  function inv(c){
-    c=c/255;
-    return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
-  }
+  function inv(c){c=c/255;return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);}
   var R=inv(r)*100, G=inv(g)*100, B=inv(b)*100;
   return {
     x: R*0.4124564 + G*0.3575761 + B*0.1804375,
@@ -47,15 +44,9 @@ function rgb2xyz(r,g,b){
 
 function xyz2lab(x,y,z){
   var Xn=95.047, Yn=100.000, Zn=108.883;
-  function f(t){
-    return t>0.008856 ? Math.pow(t,1/3) : (7.787*t + 16/116);
-  }
+  function f(t){return t>0.008856 ? Math.pow(t,1/3) : (7.787*t + 16/116);}
   var fx=f(x/Xn), fy=f(y/Yn), fz=f(z/Zn);
-  return {
-    L: 116*fy - 16,
-    a: 500*(fx - fy),
-    b: 200*(fy - fz)
-  };
+  return {L: 116*fy - 16,a: 500*(fx - fy),b: 200*(fy - fz)};
 }
 
 function rgb2lab(r,g,b){
@@ -117,7 +108,7 @@ function deltaE2000(lab1,lab2){
 }
 
 /* ============================================================
-   AUTO WHITE BALANCE - Gray World
+   AUTO WHITE BALANCE
    ============================================================ */
 function autoWhiteBalance(imgData){
   var data=imgData.data;
@@ -135,7 +126,7 @@ function autoWhiteBalance(imgData){
 }
 
 /* ============================================================
-   LẤY MẪU 5x5 VÀ LỌC OUTLIER
+   LẤY MẪU 5x5 + IQR
    ============================================================ */
 function sampleColors(imgData, cx, cy, size){
   var data=imgData.data;
@@ -170,12 +161,7 @@ function sampleColors(imgData, cx, cy, size){
     }
   }
   if(cnt===0)return{r:0,g:0,b:0,count:0};
-  return{
-    r:Math.round(sumR/cnt),
-    g:Math.round(sumG/cnt),
-    b:Math.round(sumB/cnt),
-    count:cnt
-  };
+  return{r:Math.round(sumR/cnt),g:Math.round(sumG/cnt),b:Math.round(sumB/cnt),count:cnt};
 }
 
 /* ============================================================
@@ -183,7 +169,6 @@ function sampleColors(imgData, cx, cy, size){
    ============================================================ */
 function estimatePHAdvanced(correctedRGB, originalRGB){
   var lab=rgb2lab(correctedRGB.r, correctedRGB.g, correctedRGB.b);
-
   var deltas=[];
   for(var i=0;i<state.refColors.length;i++){
     var c=state.refColors[i];
@@ -191,9 +176,7 @@ function estimatePHAdvanced(correctedRGB, originalRGB){
     var dE=deltaE2000(lab, labRef);
     deltas.push({ph:c.ph, dE:dE, ref:c});
   }
-
   deltas.sort(function(a,b){return a.dE-b.dE;});
-
   var top=deltas.slice(0,3);
   var sumW=0, sumPH=0;
   for(var j=0;j<top.length;j++){
@@ -202,24 +185,19 @@ function estimatePHAdvanced(correctedRGB, originalRGB){
     sumPH+=w*top[j].ph;
   }
   var ph=sumPH/sumW;
-
   var co=state.coefficients;
   var hsv=rgb2hsv(correctedRGB.r, correctedRGB.g, correctedRGB.b);
   var phReg=co.a*correctedRGB.r + co.b*correctedRGB.g + co.c*correctedRGB.b + co.d*hsv.h + co.e;
   ph = 0.8*ph + 0.2*phReg;
-
   ph=Math.max(4.0, Math.min(7.5, ph));
-
   var bestDE=top[0].dE;
   var secondDE=top[1].dE;
   var gap=secondDE - bestDE;
   var confColor = Math.max(0, Math.min(1, 1 - bestDE/30));
   var confSep   = Math.max(0, Math.min(1, gap/15));
   var confidence = 0.65*confColor + 0.35*confSep;
-
   var brightness = (correctedRGB.r + correctedRGB.g + correctedRGB.b)/3;
   if(brightness < 60 || brightness > 240) confidence *= 0.7;
-
   return {
     ph: Math.round(ph*10)/10,
     confidence: Math.round(confidence*100),
@@ -279,6 +257,7 @@ function showTab(name){
     if(typeof stopCameraStream==='function') stopCameraStream();
     if(typeof stopQRTimer==='function'){
       stopQRTimer();
+      if(typeof stopHostPolling==='function') stopHostPolling();
       if($('qrPanel')) $('qrPanel').style.display='none';
     }
   }
@@ -330,9 +309,7 @@ function queryCameraPermission(){
         status.onchange = function(){
           camState.permission = status.state;
           renderCameraPermUI();
-          if (status.state === 'granted') {
-            enumerateCameras();
-          }
+          if (status.state === 'granted') enumerateCameras();
         };
         resolve(status.state);
       })
@@ -357,14 +334,10 @@ function enumerateCameras(){
           opt.textContent = d.label || ('Camera ' + (i+1));
           sel.appendChild(opt);
         });
-        if (camState.devices.length) {
-          camState.selectedDeviceId = camState.devices[0].deviceId;
-        }
+        if (camState.devices.length) camState.selectedDeviceId = camState.devices[0].deviceId;
       }
       var row = $('camDeviceRow');
-      if (row) {
-        row.style.display = camState.devices.length > 1 ? 'block' : 'none';
-      }
+      if (row) row.style.display = camState.devices.length > 1 ? 'block' : 'none';
       return camState.devices;
     })
     .catch(function(){ return []; });
@@ -372,14 +345,9 @@ function enumerateCameras(){
 
 function requestCameraPermission(){
   return new Promise(function(resolve, reject){
-    if (!isCameraSupported()) {
-      reject(new Error('Trình duyệt không hỗ trợ camera.'));
-      return;
-    }
+    if (!isCameraSupported()) { reject(new Error('Trình duyệt không hỗ trợ camera.')); return; }
     var constraints = { video: true, audio: false };
-    if (camState.selectedDeviceId) {
-      constraints.video = { deviceId: { exact: camState.selectedDeviceId } };
-    }
+    if (camState.selectedDeviceId) constraints.video = { deviceId: { exact: camState.selectedDeviceId } };
     navigator.mediaDevices.getUserMedia(constraints)
       .then(function(stream){
         stream.getTracks().forEach(function(t){ t.stop(); });
@@ -392,9 +360,7 @@ function requestCameraPermission(){
           resolve('denied');
         } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
           resolve('no-device');
-        } else {
-          reject(err);
-        }
+        } else { reject(err); }
       });
   });
 }
@@ -403,26 +369,19 @@ function getPermissionHelpText(){
   var ua = navigator.userAgent.toLowerCase();
   var isMobile = /android|iphone|ipad|ipod/.test(ua);
   if (/chrome/.test(ua) && !isMobile) {
-    return '<b>🔴 Camera đã bị chặn trên Chrome</b><br>' +
-      'Bấm vào <b>biểu tượng 🔒 hoặc ⚠️</b> bên trái thanh địa chỉ → chọn <b>Site settings / Cài đặt trang</b> → ' +
-      'mục <b>Camera</b> → chọn <b>Allow / Cho phép</b> → tải lại trang (F5).';
+    return '<b>🔴 Camera đã bị chặn trên Chrome</b><br>Bấm vào <b>biểu tượng 🔒 hoặc ⚠️</b> bên trái thanh địa chỉ → chọn <b>Site settings</b> → mục <b>Camera</b> → chọn <b>Allow</b> → tải lại trang (F5).';
   }
   if (/chrome/.test(ua) && isMobile) {
-    return '<b>🔴 Camera đã bị chặn trên Chrome Mobile</b><br>' +
-      'Bấm <b>biểu tượng 🔒</b> trên thanh địa chỉ → <b>Permissions / Quyền</b> → <b>Camera</b> → <b>Allow</b> → tải lại trang.';
+    return '<b>🔴 Camera đã bị chặn trên Chrome Mobile</b><br>Bấm <b>biểu tượng 🔒</b> trên thanh địa chỉ → <b>Permissions</b> → <b>Camera</b> → <b>Allow</b> → tải lại trang.';
   }
   if (/safari/.test(ua)) {
-    return '<b>🔴 Camera đã bị chặn trên Safari</b><br>' +
-      'Vào <b>Cài đặt (Settings)</b> → <b>Safari</b> → <b>Camera</b> → chọn <b>Allow / Hỏi / Cho phép</b>. ' +
-      'Hoặc vào <b>Cài đặt → Quyền riêng tư → Camera</b> → bật cho Safari.';
+    return '<b>🔴 Camera đã bị chặn trên Safari</b><br>Vào <b>Cài đặt</b> → <b>Safari</b> → <b>Camera</b> → chọn <b>Allow</b>. Hoặc vào <b>Cài đặt → Quyền riêng tư → Camera</b> → bật cho Safari.';
   }
   if (/firefox/.test(ua)) {
-    return '<b>🔴 Camera đã bị chặn trên Firefox</b><br>' +
-      'Bấm vào <b>biểu tượng 🔒</b> trên thanh địa chỉ → <b>Xóa quyền / Clear permission</b> → tải lại trang (F5) → bấm <b>Allow</b> khi được hỏi.';
+    return '<b>🔴 Camera đã bị chặn trên Firefox</b><br>Bấm vào <b>biểu tượng 🔒</b> trên thanh địa chỉ → <b>Xóa quyền</b> → tải lại trang (F5) → bấm <b>Allow</b> khi được hỏi.';
   }
   if (/edg/.test(ua)) {
-    return '<b>🔴 Camera đã bị chặn trên Edge</b><br>' +
-      'Bấm <b>biểu tượng 🔒</b> → <b>Permissions for this site</b> → <b>Camera</b> → <b>Allow</b> → tải lại trang.';
+    return '<b>🔴 Camera đã bị chặn trên Edge</b><br>Bấm <b>biểu tượng 🔒</b> → <b>Permissions for this site</b> → <b>Camera</b> → <b>Allow</b> → tải lại trang.';
   }
   return '<b>🔴 Camera đã bị chặn</b><br>Mở cài đặt trình duyệt → Quyền trang web → Camera → Cho phép → tải lại trang.';
 }
@@ -445,7 +404,7 @@ function renderCameraPermUI(){
     canStart = true;
     if (help) help.style.display = 'none';
     if (btnReq) { btnReq.textContent = '✅ Đã cấp'; btnReq.disabled = true; }
-    status.innerHTML = 'Camera đã sẵn sàng sử dụng.';
+    status.innerHTML = 'Camera đã sẵn sàng sử dụng.' + badgeText;
   } else if (camState.permission === 'prompt' || camState.permission === 'unknown') {
     badgeClass += 'prompt';
     badgeText = '<span class="' + badgeClass + '">🟡 Chưa cấp quyền</span>';
@@ -455,10 +414,7 @@ function renderCameraPermUI(){
   } else if (camState.permission === 'denied') {
     badgeClass += 'denied';
     badgeText = '<span class="' + badgeClass + '">🔴 Đã bị chặn</span>';
-    if (help) {
-      help.style.display = 'block';
-      if (helpText) helpText.innerHTML = getPermissionHelpText();
-    }
+    if (help) { help.style.display = 'block'; if (helpText) helpText.innerHTML = getPermissionHelpText(); }
     if (btnReq) { btnReq.textContent = '🔁 Thử lại'; btnReq.disabled = false; }
     status.innerHTML = 'Camera đang bị chặn.' + badgeText;
   } else if (camState.permission === 'unsupported') {
@@ -480,16 +436,12 @@ function initCameraPermission(){
   }
   queryCameraPermission().then(function(){
     renderCameraPermUI();
-    if (camState.permission === 'granted') {
-      enumerateCameras();
-    }
+    if (camState.permission === 'granted') enumerateCameras();
     document.addEventListener('visibilitychange', function(){
       if (!document.hidden) {
         queryCameraPermission().then(function(){
           renderCameraPermUI();
-          if (camState.permission === 'granted' && !camState.devices.length) {
-            enumerateCameras();
-          }
+          if (camState.permission === 'granted' && !camState.devices.length) enumerateCameras();
         });
       }
     });
@@ -533,24 +485,13 @@ function initCameraPermission(){
 }
 
 function startCameraStream(){
-  if (!isCameraSupported()) {
-    toast('Trình duyệt không hỗ trợ camera.');
-    return;
-  }
+  if (!isCameraSupported()) { toast('Trình duyệt không hỗ trợ camera.'); return; }
   if (camState.stream) return;
-
   var constraints = {
-    video: {
-      facingMode: 'environment',
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
+    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: false
   };
-  if (camState.selectedDeviceId) {
-    constraints.video = { deviceId: { exact: camState.selectedDeviceId } };
-  }
-
+  if (camState.selectedDeviceId) constraints.video = { deviceId: { exact: camState.selectedDeviceId } };
   navigator.mediaDevices.getUserMedia(constraints)
     .then(function(stream){
       camState.stream = stream;
@@ -584,10 +525,7 @@ function stopCameraStream(){
 }
 
 $('startCam').addEventListener('click', function(){
-  if (camState.stream) {
-    stopCameraStream();
-    return;
-  }
+  if (camState.stream) { stopCameraStream(); return; }
   startCameraStream();
 });
 
@@ -616,7 +554,6 @@ function loadImageFromDataUrl(dataUrl){
     tc.height=img.height*scale;
     tc.getContext('2d').drawImage(img,0,0,tc.width,tc.height);
     state.imageThumb=tc.toDataURL('image/jpeg',0.7);
-
     goStep(2);
     drawCropCanvas();
   };
@@ -655,7 +592,7 @@ function resetScan(){
 }
 
 /* ============================================================
-   CROP CANVAS + WHITE BALANCE
+   CROP CANVAS
    ============================================================ */
 function drawCropCanvas(){
   if(!state.image)return;
@@ -666,10 +603,8 @@ function drawCropCanvas(){
   c.width=Math.round(state.image.width*scale);
   c.height=Math.round(state.image.height*scale);
   ctx.drawImage(state.image,0,0,c.width,c.height);
-
   state.imageDataFull=ctx.getImageData(0,0,c.width,c.height);
   state.whiteBalance=autoWhiteBalance(state.imageDataFull);
-
   pickColor(c.width/2, c.height/2);
 }
 
@@ -678,9 +613,7 @@ function pickColor(x,y){
   var imgData=state.imageDataFull;
   var sampled=sampleColors(imgData, Math.round(x), Math.round(y), 5);
   if(!sampled.count){toast('Không lấy được mẫu màu');return;}
-
   state.pickedRGB={r:sampled.r, g:sampled.g, b:sampled.b};
-
   var wb=state.whiteBalance;
   var corr={
     r: Math.max(0, Math.min(255, Math.round(sampled.r*wb.scaleR))),
@@ -690,7 +623,6 @@ function pickColor(x,y){
   state.pickedRGBCorrected=corr;
   state.pickedHSV=rgb2hsv(corr.r, corr.g, corr.b);
   state.pickedLab=rgb2lab(corr.r, corr.g, corr.b);
-
   $('pickPos').textContent='('+Math.round(x)+', '+Math.round(y)+') · '+sampled.count+' mẫu';
   $('rgbVal').textContent=sampled.r+', '+sampled.g+', '+sampled.b;
   $('rgbCorr').textContent=corr.r+', '+corr.g+', '+corr.b;
@@ -713,31 +645,26 @@ function analyze(){
   var result=estimatePHAdvanced(state.pickedRGBCorrected, state.pickedRGB);
   var ph=result.ph;
   var info=classifyPH(ph);
-
   state.currentPH=ph;
   state.currentStatus=info;
   state.currentConfidence=result.confidence;
   state.currentDE=result.bestDE;
   state.currentRefMatch=result.refMatch;
   state.currentLab=result.lab;
-
   $('phValue').textContent=ph.toFixed(1);
   $('phStatus').textContent='Đất '+info.status;
   $('phStatus').className='status-badge '+info.cls;
-
   var conf=result.confidence;
   var confColor = conf>=80?'#10b981' : conf>=60?'#f59e0b' : '#ef4444';
   $('confFill').style.width=conf+'%';
   $('confFill').style.background=confColor;
   $('confTxt').textContent=conf+'% · '+(conf>=80?'Rất tốt':conf>=60?'Khá tốt':conf>=40?'Trung bình':'Thấp — nên đo lại');
-
   $('r3').textContent=state.pickedRGB.r+', '+state.pickedRGB.g+', '+state.pickedRGB.b;
   $('rgbCorr3').textContent=state.pickedRGBCorrected.r+', '+state.pickedRGBCorrected.g+', '+state.pickedRGBCorrected.b;
   $('h3').textContent=state.pickedHSV.h+'°, '+state.pickedHSV.s+'%, '+state.pickedHSV.v+'%';
   $('lab3').textContent='L:'+result.lab.L.toFixed(1)+' a:'+result.lab.a.toFixed(1)+' b:'+result.lab.b.toFixed(1);
   $('de3').textContent=result.bestDE.toFixed(1);
   $('refMatch').textContent='pH '+result.refMatch.ph;
-
   $('recommend').innerHTML=getRecommendation(ph);
   calcLime();
   goStep(3);
@@ -789,9 +716,7 @@ function saveLog(){
   if(state.currentPH==null){toast('Chưa có kết quả!');return;}
   var farmSel=$('saveFarm');
   var farm=farmSel.value;
-  if(farm==='Lô khác'){
-    farm=$('customFarm').value.trim() || 'Lô chưa đặt tên';
-  }
+  if(farm==='Lô khác') farm=$('customFarm').value.trim() || 'Lô chưa đặt tên';
   var entry={
     id:Date.now(),
     time:new Date().toISOString(),
@@ -884,7 +809,6 @@ function renderLog(){
   }
   sel.value=cur==='all'||farms[cur]?'all':cur;
   if(farms[cur])sel.value=cur;
-
   var tbody=$('logBody');
   if(!filtered.length){
     tbody.innerHTML='<tr><td colspan="6" class="empty">Chưa có dữ liệu</td></tr>';
@@ -919,15 +843,13 @@ function viewLog(id){
   if(!log){toast('Không tìm thấy');return;}
   var info=classifyPH(log.ph);
   var html='';
-  if(log.image){
-    html+='<img class="modal-img" src="'+log.image+'" alt="Ảnh mẫu">';
-  }
+  if(log.image) html+='<img class="modal-img" src="'+log.image+'" alt="Ảnh mẫu">';
   html+='<div class="modal-detail">';
   html+='<div><b>Thời gian:</b> '+new Date(log.time).toLocaleString('vi-VN')+'</div>';
   html+='<div><b>Vườn:</b> '+escapeHtml(log.farm)+'</div>';
   html+='<div><b>pH:</b> <span style="color:'+info.color+';font-size:1.2rem;font-weight:800">'+log.ph.toFixed(1)+'</span> ('+log.status+')</div>';
   if(log.confidence)html+='<div><b>Độ tin cậy:</b> '+log.confidence+'%</div>';
-  if(log.deltaE)html+='<div><b>ΔE2000:</b> '+log.deltaE+' (càng nhỏ càng chính xác)</div>';
+  if(log.deltaE)html+='<div><b>ΔE2000:</b> '+log.deltaE+'</div>';
   if(log.refMatchPH)html+='<div><b>Màu tham chiếu gần nhất:</b> pH '+log.refMatchPH+'</div>';
   html+='<div><b>RGB gốc:</b> '+log.r+', '+log.g+', '+log.b+'</div>';
   if(log.rCorr)html+='<div><b>RGB hiệu chỉnh:</b> '+log.rCorr+', '+log.gCorr+', '+log.bCorr+'</div>';
@@ -937,7 +859,6 @@ function viewLog(id){
   if(log.note)html+='<div><b>Ghi chú:</b> '+escapeHtml(log.note)+'</div>';
   html+='</div>';
   $('modalContent').innerHTML=html;
-
   $('editNoteBtn').onclick=function(){
     var newNote=prompt('Sửa ghi chú:', log.note||'');
     if(newNote===null)return;
@@ -956,9 +877,7 @@ function viewLog(id){
   $('modalBg').classList.add('show');
 }
 
-function closeModal(){
-  $('modalBg').classList.remove('show');
-}
+function closeModal(){ $('modalBg').classList.remove('show'); }
 
 function deleteLog(id){
   if(!confirm('Xóa bản ghi này?'))return;
@@ -986,14 +905,8 @@ function exportCSV(){
     var l=logs[i];
     rows.push([
       '"'+new Date(l.time).toLocaleString('vi-VN')+'"',
-      '"'+l.farm+'"',
-      l.ph.toFixed(1),
-      l.status,
-      (l.confidence||0)+'%',
-      l.deltaE||'',
-      l.r,l.g,l.b,
-      l.rCorr||'',l.gCorr||'',l.bCorr||'',
-      l.temp||'',l.humidity||'',
+      '"'+l.farm+'"',l.ph.toFixed(1),l.status,(l.confidence||0)+'%',l.deltaE||'',
+      l.r,l.g,l.b,l.rCorr||'',l.gCorr||'',l.bCorr||'',l.temp||'',l.humidity||'',
       '"'+(l.note||'').replace(/"/g,'""')+'"'
     ]);
   }
@@ -1006,11 +919,8 @@ function exportJSON(){
   var logs=getLogs();
   if(!logs.length){toast('Không có dữ liệu');return;}
   var data={
-    version:'1.0',
-    exported:new Date().toISOString(),
-    logs:logs,
-    coefficients:state.coefficients,
-    refColors:state.refColors
+    version:'1.0',exported:new Date().toISOString(),
+    logs:logs,coefficients:state.coefficients,refColors:state.refColors
   };
   downloadBlob(JSON.stringify(data,null,2),'duriansoil_backup.json','application/json');
   toast('💾 Đã xuất backup');
@@ -1026,18 +936,10 @@ function exportPDF(){
   for(var i=0;i<filtered.length;i++){
     var l=filtered[i];
     var color=classifyPH(l.ph).color;
-    rowsHtml+='<tr>'+
-      '<td>'+(i+1)+'</td>'+
-      '<td>'+new Date(l.time).toLocaleString('vi-VN')+'</td>'+
-      '<td>'+escapeHtml(l.farm)+'</td>'+
-      '<td style="color:'+color+';font-weight:700">'+l.ph.toFixed(1)+'</td>'+
-      '<td>'+l.status+'</td>'+
-      '<td>'+((l.confidence||0))+'%</td>'+
-      '<td>'+escapeHtml(l.note||'')+'</td>'+
-      '</tr>';
+    rowsHtml+='<tr><td>'+(i+1)+'</td><td>'+new Date(l.time).toLocaleString('vi-VN')+'</td><td>'+escapeHtml(l.farm)+'</td><td style="color:'+color+';font-weight:700">'+l.ph.toFixed(1)+'</td><td>'+l.status+'</td><td>'+((l.confidence||0))+'%</td><td>'+escapeHtml(l.note||'')+'</td></tr>';
   }
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nhật ký pH</title>'+
-    '<style>body{font-family:Arial;padding:24px;color:#111}h1{color:#047857;border-bottom:3px solid #10b981;padding-bottom:8px}.meta{color:#6b7280;font-size:13px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#10b981;color:#fff}tr:nth-child(even){background:#f9fafb}.footer{margin-top:20px;font-size:11px;color:#6b7280;text-align:center}</style></head><body>'+
+  var printTag='<'+'script>window.onload=function(){setTimeout(function(){window.print();},400)}<'+'/script>';
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nhật ký pH</title><style>body{font-family:Arial;padding:24px;color:#111}h1{color:#047857;border-bottom:3px solid #10b981;padding-bottom:8px}.meta{color:#6b7280;font-size:13px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#10b981;color:#fff}tr:nth-child(even){background:#f9fafb}.footer{margin-top:20px;font-size:11px;color:#6b7280;text-align:center}</style></head><body>'+
     '<h1>🌱 Nhật ký đo pH đất sầu riêng</h1>'+
     '<div class="meta">'+
     '<div><b>Ứng dụng:</b> DurianSoil pH-Vision</div>'+
@@ -1046,8 +948,7 @@ function exportPDF(){
     '<div><b>Tổng số mẫu:</b> '+filtered.length+'</div>'+
     '</div>'+
     '<table><thead><tr><th>#</th><th>Thời gian</th><th>Vườn</th><th>pH</th><th>Trạng thái</th><th>Tin cậy</th><th>Ghi chú</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
-    '<div class="footer">Báo cáo tự động từ DurianSoil pH-Vision</div>'+
-    '<script>window.onload=function(){setTimeout(function(){window.print();},400)}<\/script></body></html>';
+    '<div class="footer">Báo cáo tự động từ DurianSoil pH-Vision</div>'+printTag+'</body></html>';
   w.document.write(html);
   w.document.close();
   toast('📄 Đang mở hộp thoại in PDF...');
@@ -1208,9 +1109,7 @@ function renderSamples(){
     var s=samples[i];
     var d=s.app-s.std;
     sumSq+=d*d;
-    html+='<tr><td>'+(i+1)+'</td><td>'+s.app.toFixed(2)+'</td><td>'+s.std.toFixed(2)+'</td>'+
-      '<td style="color:'+(Math.abs(d)<0.3?'#10b981':'#ef4444')+'">'+d.toFixed(2)+'</td>'+
-      '<td class="del" onclick="delSample('+i+')">✕</td></tr>';
+    html+='<tr><td>'+(i+1)+'</td><td>'+s.app.toFixed(2)+'</td><td>'+s.std.toFixed(2)+'</td><td style="color:'+(Math.abs(d)<0.3?'#10b981':'#ef4444')+'">'+d.toFixed(2)+'</td><td class="del" onclick="delSample('+i+')">✕</td></tr>';
   }
   tbody.innerHTML=html;
   var rmse=Math.sqrt(sumSq/samples.length);
@@ -1251,13 +1150,14 @@ window.addEventListener('online',updateStatus);
 window.addEventListener('offline',updateStatus);
 
 /* ============================================================
-   QR CAMERA REMOTE
+   QR CAMERA REMOTE - POLLING VERSION
    ============================================================ */
 var qrState = {
   token: null,
   expiresAt: 0,
   timer: null,
-  bc: null,
+  pollTimer: null,
+  lastMsgTs: 0,
   mode: 'host'
 };
 
@@ -1279,32 +1179,57 @@ function isFileProtocol(){
   return location.protocol === 'file:';
 }
 
-function initChannel(onMessage){
-  if ('BroadcastChannel' in window) {
-    try {
-      qrState.bc = new BroadcastChannel('duriansoil_cam');
-      qrState.bc.onmessage = function(ev){ onMessage(ev.data); };
-    } catch(e){ qrState.bc = null; }
+function sendChannel(msg){
+  try {
+    msg._t = Date.now();
+    msg._id = Math.random().toString(36).slice(2);
+    localStorage.setItem('dsp_cam_msg', JSON.stringify(msg));
+  } catch(e){
+    console.error('sendChannel error:', e);
+    throw e;
   }
-  window.addEventListener('storage', function(ev){
-    if (ev.key === 'dsp_cam_msg' && ev.newValue) {
-      try { onMessage(JSON.parse(ev.newValue)); } catch(e){}
-    }
-  });
 }
 
-function sendChannel(msg){
-  msg._t = Date.now();
-  var payload = JSON.stringify(msg);
-  if (qrState.bc) {
-    try { qrState.bc.postMessage(msg); } catch(e){}
+function startHostPolling(){
+  stopHostPolling();
+  qrState.pollTimer = setInterval(function(){
+    try {
+      var raw = localStorage.getItem('dsp_cam_msg');
+      if (!raw) return;
+      var msg = JSON.parse(raw);
+      if (!msg || !msg._t) return;
+      if (msg._t <= qrState.lastMsgTs) return;
+      qrState.lastMsgTs = msg._t;
+      handleHostMessage(msg);
+    } catch(e){}
+  }, 300);
+}
+
+function stopHostPolling(){
+  if (qrState.pollTimer) {
+    clearInterval(qrState.pollTimer);
+    qrState.pollTimer = null;
   }
-  try {
-    localStorage.setItem('dsp_cam_msg', payload);
+}
+
+function handleHostMessage(msg){
+  if (msg.token !== qrState.token) return;
+  if (Date.now() > qrState.expiresAt) {
+    $('qrStatus').textContent = '❌ Mã đã hết hạn, ảnh không được nhận.';
+    return;
+  }
+  if (msg.type === 'hello') {
+    $('qrStatus').innerHTML = '📱 <b style="color:#10b981">Điện thoại đã kết nối!</b> Đang chờ ảnh...';
+  } else if (msg.type === 'photo') {
+    $('qrStatus').innerHTML = '✅ <b style="color:#10b981">Đã nhận ảnh!</b> Đang xử lý...';
+    stopQRTimer();
+    stopHostPolling();
     setTimeout(function(){
-      try { localStorage.removeItem('dsp_cam_msg'); } catch(e){}
-    }, 1500);
-  } catch(e){}
+      $('qrPanel').style.display = 'none';
+      loadImageFromDataUrl(msg.dataUrl);
+      toast('📥 Đã nhận ảnh từ điện thoại');
+    }, 300);
+  }
 }
 
 function fmtTime(ms){
@@ -1317,33 +1242,12 @@ function fmtTime(ms){
 
 function openQRPanel(){
   if (isFileProtocol()) {
-    toast('⚠️ Đang mở file:// — QR chỉ mở được trên máy này. Hãy host qua http(s) để dùng trên điện thoại.');
+    toast('⚠️ Đang mở file:// — QR chỉ mở được trên máy này. Hãy host qua http(s).');
   }
   $('qrPanel').style.display = 'block';
   createQRToken();
-  initChannel(function(msg){
-    if (!msg || msg.type !== 'photo') return;
-    if (msg.token !== qrState.token) return;
-    if (Date.now() > qrState.expiresAt) {
-      $('qrStatus').textContent = '❌ Mã đã hết hạn, ảnh không được nhận.';
-      return;
-    }
-    $('qrStatus').textContent = '✅ Đã nhận ảnh từ điện thoại! Đang xử lý...';
-    stopQRTimer();
-    $('qrPanel').style.display = 'none';
-    loadImageFromDataUrl(msg.dataUrl);
-    toast('📥 Đã nhận ảnh từ điện thoại');
-  });
-  window.addEventListener('storage', function(ev){
-    if (ev.key === 'dsp_cam_msg' && ev.newValue) {
-      try {
-        var m = JSON.parse(ev.newValue);
-        if (m.type === 'hello' && m.token === qrState.token && Date.now() <= qrState.expiresAt) {
-          $('qrStatus').textContent = '📱 Điện thoại đã kết nối. Đang chờ ảnh...';
-        }
-      } catch(e){}
-    }
-  });
+  qrState.lastMsgTs = Date.now() - 1000;
+  startHostPolling();
 }
 
 function createQRToken(){
@@ -1366,6 +1270,15 @@ function createQRToken(){
     box.innerHTML = '<div style="color:#ef4444;font-size:.85rem">Không tạo được QR.<br>'+url+'</div>';
   }
 
+  var urlBox = document.getElementById('qrUrlDisplay');
+  if (!urlBox) {
+    urlBox = document.createElement('div');
+    urlBox.id = 'qrUrlDisplay';
+    urlBox.style.cssText = 'font-size:.72rem;color:#6b7280;margin-top:8px;word-break:break-all;background:#f9fafb;padding:6px;border-radius:6px';
+    box.parentNode.appendChild(urlBox);
+  }
+  urlBox.textContent = url;
+
   stopQRTimer();
   qrState.timer = setInterval(function(){
     var left = qrState.expiresAt - Date.now();
@@ -1385,6 +1298,9 @@ function stopQRTimer(){
   if (qrState.timer) { clearInterval(qrState.timer); qrState.timer = null; }
 }
 
+/* ============================================================
+   PHONE MODE
+   ============================================================ */
 function runPhoneMode(token){
   qrState.mode = 'phone';
   qrState.token = token;
@@ -1414,11 +1330,17 @@ function runPhoneMode(token){
       '<button id="pShot" style="display:block;width:100%;margin:12px 0;padding:15px;border:none;border-radius:10px;background:#10b981;color:#fff;font-size:1rem;font-weight:700;cursor:pointer">📸 Chụp & gửi về máy tính</button>' +
       '<button id="pSwitch" style="display:block;width:100%;margin:8px 0;padding:11px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:.9rem;cursor:pointer">🔄 Đổi camera trước/sau</button>' +
       '<canvas id="pCanvas" style="display:none"></canvas>' +
-      '<div style="font-size:.8rem;color:#6b7280;margin-top:12px">Sau khi chụp, ảnh sẽ tự động gửi về tab đang mở QR trên máy tính.</div>' +
+      '<div style="font-size:.8rem;color:#6b7280;margin-top:12px">Sau khi chụp, ảnh sẽ tự động gửi về tab máy tính. <b>Giữ tab này mở cho tới khi thấy thông báo "Đã gửi".</b></div>' +
+      '<div id="phoneDebug" style="font-size:.7rem;color:#9ca3af;margin-top:8px;font-family:monospace"></div>' +
     '</div>';
 
   var facing = 'environment';
   var stream = null;
+
+  function dbg(t){
+    var el = document.getElementById('phoneDebug');
+    if (el) el.textContent = t;
+  }
 
   function setMsg(t, color){
     var el = document.getElementById('phoneMsg');
@@ -1452,15 +1374,20 @@ function runPhoneMode(token){
         btn.disabled = true;
         btn.style.background = '#d1fae5';
         btn.style.color = '#065f46';
-        sendChannel({ type:'hello', token: token });
+        try {
+          sendChannel({ type:'hello', token: token });
+          dbg('Đã gửi hello lúc ' + new Date().toLocaleTimeString('vi-VN'));
+        } catch(e) {
+          dbg('LỖI gửi hello: ' + e.message);
+        }
       })
       .catch(function(err){
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setPermStatus('🔴 Đã bị chặn', '#ef4444');
-          setMsg('❌ Bạn đã từ chối quyền camera. Mở Cài đặt trình duyệt → Quyền trang web → Camera → Cho phép → tải lại trang.', 'err');
+          setMsg('❌ Bạn đã từ chối quyền camera. Mở Cài đặt trình duyệt → Quyền → Camera → Cho phép.', 'err');
         } else if (err.name === 'NotFoundError') {
           setPermStatus('⚠️ Không có camera', '#f59e0b');
-          setMsg('❌ Không tìm thấy camera trên thiết bị.', 'err');
+          setMsg('❌ Không tìm thấy camera.', 'err');
         } else {
           setMsg('❌ Lỗi camera: ' + err.message, 'err');
         }
@@ -1480,12 +1407,25 @@ function runPhoneMode(token){
     c.width = v.videoWidth;
     c.height = v.videoHeight;
     c.getContext('2d').drawImage(v, 0, 0);
-    var dataUrl = c.toDataURL('image/jpeg', 0.9);
-    setMsg('📤 Đang gửi ảnh về máy tính...');
-    sendChannel({ type:'photo', token: token, dataUrl: dataUrl });
-    setTimeout(function(){
-      setMsg('✅ Đã gửi ảnh. Có thể chụp lại nếu muốn, hoặc đóng tab.', 'ok');
-    }, 400);
+    var dataUrl = c.toDataURL('image/jpeg', 0.85);
+
+    var sizeKB = Math.round(dataUrl.length / 1024);
+    dbg('Ảnh: ' + sizeKB + 'KB · Đang gửi...');
+
+    try {
+      sendChannel({ type:'photo', token: token, dataUrl: dataUrl });
+      setMsg('✅ Đã gửi ảnh (' + sizeKB + 'KB). Chờ máy tính nhận...', 'ok');
+      dbg('Đã gửi lúc ' + new Date().toLocaleTimeString('vi-VN') + ' · ' + sizeKB + 'KB');
+      setTimeout(function(){
+        try { sendChannel({ type:'photo', token: token, dataUrl: dataUrl }); } catch(e){}
+      }, 800);
+      setTimeout(function(){
+        try { sendChannel({ type:'photo', token: token, dataUrl: dataUrl }); } catch(e){}
+      }, 1600);
+    } catch(e) {
+      setMsg('❌ Lỗi gửi: ' + e.message + '. Ảnh quá lớn?', 'err');
+      dbg('LỖI: ' + e.message);
+    }
   });
 
   document.getElementById('pSwitch').addEventListener('click', function(){
@@ -1505,7 +1445,7 @@ function runPhoneMode(token){
         setPermStatus('🟡 Chưa cấp quyền', '#f59e0b');
       }
     }).catch(function(){
-      setPermStatus('🟡 Chưa cấp quyền', '#f59e0b');
+      setPermStatus('🟡 Bấm để cấp quyền', '#f59e0b');
     });
   } else {
     setPermStatus('🟡 Bấm để cấp quyền', '#f59e0b');
@@ -1515,10 +1455,12 @@ function runPhoneMode(token){
 $('qrConnectBtn').addEventListener('click', openQRPanel);
 $('qrRenewBtn').addEventListener('click', function(){
   createQRToken();
+  qrState.lastMsgTs = Date.now() - 1000;
   toast('🔄 Đã tạo mã QR mới');
 });
 $('qrCloseBtn').addEventListener('click', function(){
   stopQRTimer();
+  stopHostPolling();
   $('qrPanel').style.display = 'none';
 });
 
