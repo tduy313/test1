@@ -257,7 +257,6 @@ function showTab(name){
     if(typeof stopCameraStream==='function') stopCameraStream();
     if(typeof stopQRTimer==='function'){
       stopQRTimer();
-      if(typeof stopHostPolling==='function') stopHostPolling();
       if($('qrPanel')) $('qrPanel').style.display='none';
     }
   }
@@ -428,59 +427,81 @@ function renderCameraPermUI(){
 }
 
 function initCameraPermission(){
-  if (!isCameraSupported()) {
-    camState.supported = false;
-    camState.permission = 'unsupported';
-    renderCameraPermUI();
-    return;
-  }
-  queryCameraPermission().then(function(){
-    renderCameraPermUI();
-    if (camState.permission === 'granted') enumerateCameras();
-    document.addEventListener('visibilitychange', function(){
-      if (!document.hidden) {
-        queryCameraPermission().then(function(){
-          renderCameraPermUI();
-          if (camState.permission === 'granted' && !camState.devices.length) enumerateCameras();
-        });
-      }
-    });
-  });
-
-  var btnReq = $('requestCamPerm');
-  if (btnReq) {
-    btnReq.addEventListener('click', function(){
-      btnReq.textContent = '⏳ Đang xin quyền...';
-      btnReq.disabled = true;
-      requestCameraPermission().then(function(result){
-        if (result === 'granted') {
-          toast('✅ Đã được cấp quyền camera');
-          return enumerateCameras().then(function(){ renderCameraPermUI(); });
-        } else if (result === 'denied') {
-          toast('❌ Bạn đã từ chối. Xem hướng dẫn bên dưới.');
-          renderCameraPermUI();
-        } else if (result === 'no-device') {
-          toast('⚠️ Không tìm thấy camera trên thiết bị');
-          renderCameraPermUI();
+  function doInit(){
+    var checkSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    console.log('[Camera Debug]');
+    console.log('- Protocol:', location.protocol);
+    console.log('- isSecureContext:', window.isSecureContext);
+    console.log('- mediaDevices:', !!navigator.mediaDevices);
+    console.log('- getUserMedia:', !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+    
+    if (!checkSupported && location.protocol === 'https:') {
+      console.warn('[Camera] mediaDevices chưa sẵn sàng, thử lại sau 500ms...');
+      setTimeout(doInit, 500);
+      return;
+    }
+    
+    if (!checkSupported) {
+      camState.supported = false;
+      camState.permission = 'unsupported';
+      renderCameraPermUI();
+      return;
+    }
+    
+    queryCameraPermission().then(function(){
+      renderCameraPermUI();
+      if (camState.permission === 'granted') enumerateCameras();
+      document.addEventListener('visibilitychange', function(){
+        if (!document.hidden) {
+          queryCameraPermission().then(function(){
+            renderCameraPermUI();
+            if (camState.permission === 'granted' && !camState.devices.length) enumerateCameras();
+          });
         }
-      }).catch(function(err){
-        toast('❌ Lỗi: ' + err.message);
-        renderCameraPermUI();
       });
     });
-  }
 
-  var sel = $('camDeviceSelect');
-  if (sel) {
-    sel.addEventListener('change', function(){
-      camState.selectedDeviceId = this.value;
-      if (camState.stream) {
-        camState.stream.getTracks().forEach(function(t){ t.stop(); });
-        camState.stream = null;
-        state.stream = null;
-        startCameraStream();
-      }
-    });
+    var btnReq = $('requestCamPerm');
+    if (btnReq) {
+      btnReq.addEventListener('click', function(){
+        btnReq.textContent = '⏳ Đang xin quyền...';
+        btnReq.disabled = true;
+        requestCameraPermission().then(function(result){
+          if (result === 'granted') {
+            toast('✅ Đã được cấp quyền camera');
+            return enumerateCameras().then(function(){ renderCameraPermUI(); });
+          } else if (result === 'denied') {
+            toast('❌ Bạn đã từ chối. Xem hướng dẫn bên dưới.');
+            renderCameraPermUI();
+          } else if (result === 'no-device') {
+            toast('⚠️ Không tìm thấy camera trên thiết bị');
+            renderCameraPermUI();
+          }
+        }).catch(function(err){
+          toast('❌ Lỗi: ' + err.message);
+          renderCameraPermUI();
+        });
+      });
+    }
+
+    var sel = $('camDeviceSelect');
+    if (sel) {
+      sel.addEventListener('change', function(){
+        camState.selectedDeviceId = this.value;
+        if (camState.stream) {
+          camState.stream.getTracks().forEach(function(t){ t.stop(); });
+          camState.stream = null;
+          state.stream = null;
+          startCameraStream();
+        }
+      });
+    }
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', doInit);
+  } else {
+    setTimeout(doInit, 100);
   }
 }
 
@@ -1153,16 +1174,24 @@ window.addEventListener('online',updateStatus);
 window.addEventListener('offline',updateStatus);
 
 /* ============================================================
-   QR CAMERA REMOTE - POLLING VERSION
+   WEBSOCKET (PieSocket) — THAY THẾ HOÀN TOÀN LOCALSTORAGE
    ============================================================ */
-var qrState = {
+
+// ===== CẤU HÌNH — THAY BẰNG THÔNG TIN CỦA BẠN =====
+var PIESOCKET_CONFIG = {
+  clusterId: 'free.blr2',  // ← THAY BẰNG CLUSTER ID CỦA BẠN
+  apiKey: 'sJTFr7fnhoX3fbL2dhGUHeH7w6nHBvthAZ0mWR3J'  // ← THAY BẰNG API KEY CỦA BẠN
+};
+
+var wsState = {
+  socket: null,
+  roomId: null,
   token: null,
+  connected: false,
   expiresAt: 0,
   timer: null,
-  pollTimer: null,
-  lastMsgTs: 0,
   photoReceived: false,
-  mode: 'host'
+  mode: 'host'  // 'host' | 'phone'
 };
 
 var autoStepTimer = null;
@@ -1185,66 +1214,403 @@ function isFileProtocol(){
   return location.protocol === 'file:';
 }
 
-function sendChannel(msg){
+// Cập nhật trạng thái WS trên header
+function updateWSStatus(status){
+  var el = $('wsStatus');
+  if (!el) return;
+  el.className = '';
+  if (status === 'connected') {
+    el.textContent = 'WS: đã kết nối';
+    el.classList.add('connected');
+  } else if (status === 'connecting') {
+    el.textContent = 'WS: đang kết nối...';
+    el.classList.add('connecting');
+  } else {
+    el.textContent = 'WS: chưa kết nối';
+    el.classList.add('disconnected');
+  }
+}
+
+/* ===== HOST MODE: Tạo room và lắng nghe ===== */
+function openQRPanel(){
+  if (isFileProtocol()) {
+    toast('⚠️ Đang mở file:// — QR chỉ mở được trên máy này. Hãy host qua http(s).');
+  }
+  $('qrPanel').style.display = 'block';
+  createQRToken();
+  connectHostWebSocket();
+}
+
+function createQRToken(){
+  // Room ID ngẫu nhiên, không trùng
+  wsState.roomId = 'durian_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+  wsState.token = makeToken(16);
+  wsState.expiresAt = Date.now() + 3*60*1000;
+  wsState.photoReceived = false;
+
+  var box = $('receivedPhotoBox');
+  if (box) { box.style.display = 'none'; box.dataset.dataUrl = ''; }
+  clearInterval(autoStepTimer);
+
+  // URL cho điện thoại: cùng trang + query ?room=...&token=...
+  var url = getBaseUrl() + '?room=' + encodeURIComponent(wsState.roomId) + '&token=' + encodeURIComponent(wsState.token);
+
+  var boxQR = $('qrBox');
+  boxQR.innerHTML = '';
   try {
-    msg._t = Date.now();
-    msg._id = Math.random().toString(36).slice(2);
-    localStorage.setItem('dsp_cam_msg', JSON.stringify(msg));
-  } catch(e){
-    console.error('sendChannel error:', e);
-    throw e;
+    new QRCode(boxQR, {
+      text: url,
+      width: 220,
+      height: 220,
+      colorDark: '#047857',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(e) {
+    boxQR.innerHTML = '<div style="color:#ef4444;font-size:.85rem">Không tạo được QR.<br>'+url+'</div>';
   }
+
+  var urlBox = document.getElementById('qrUrlDisplay');
+  if (!urlBox) {
+    urlBox = document.createElement('div');
+    urlBox.id = 'qrUrlDisplay';
+    urlBox.style.cssText = 'font-size:.72rem;color:#6b7280;margin-top:8px;word-break:break-all;background:#f9fafb;padding:6px;border-radius:6px';
+    boxQR.parentNode.appendChild(urlBox);
+  }
+  urlBox.textContent = url;
+
+  stopQRTimer();
+  wsState.timer = setInterval(function(){
+    var left = wsState.expiresAt - Date.now();
+    if (left <= 0) {
+      $('qrCountdown').textContent = '00:00';
+      $('qrStatus').textContent = '❌ Mã đã hết hạn. Bấm "Tạo mã mới" để tiếp tục.';
+      stopQRTimer();
+      return;
+    }
+    $('qrCountdown').textContent = fmtTime(left);
+  }, 500);
+
+  $('qrStatus').textContent = 'Đang kết nối WebSocket...';
 }
 
-function startHostPolling(){
-  stopHostPolling();
-  qrState.pollTimer = setInterval(function(){
+function stopQRTimer(){
+  if (wsState.timer) { clearInterval(wsState.timer); wsState.timer = null; }
+}
+
+function connectHostWebSocket(){
+  // Đóng socket cũ nếu có
+  if (wsState.socket) {
+    try { wsState.socket.close(); } catch(e){}
+    wsState.socket = null;
+  }
+
+  updateWSStatus('connecting');
+  $('qrStatus').textContent = '⏳ Đang kết nối WebSocket...';
+
+  var wsUrl = 'wss://' + PIESOCKET_CONFIG.clusterId + '.piesocket.com/v3/' +
+              encodeURIComponent(wsState.roomId) +
+              '?api_key=' + encodeURIComponent(PIESOCKET_CONFIG.apiKey) +
+              '&notify_self=1';
+
+  console.log('[WS] Connecting to:', wsUrl);
+
+  try {
+    wsState.socket = new WebSocket(wsUrl);
+  } catch(e) {
+    console.error('[WS] Tạo socket lỗi:', e);
+    $('qrStatus').textContent = '❌ Không tạo được WebSocket: ' + e.message;
+    updateWSStatus('disconnected');
+    return;
+  }
+
+  wsState.socket.onopen = function(){
+    console.log('[WS] Connected!');
+    wsState.connected = true;
+    updateWSStatus('connected');
+    $('qrStatus').innerHTML = '✅ <b style="color:#10b981">Đã kết nối WebSocket!</b> Đang chờ điện thoại quét QR...';
+    toast('✅ WebSocket đã kết nối');
+  };
+
+  wsState.socket.onmessage = function(event){
+    console.log('[WS] Message:', event.data);
     try {
-      var raw = localStorage.getItem('dsp_cam_msg');
-      if (!raw) return;
-      var msg = JSON.parse(raw);
-      if (!msg || !msg._t) return;
-      if (msg._t <= qrState.lastMsgTs) return;
-      qrState.lastMsgTs = msg._t;
+      var msg = JSON.parse(event.data);
       handleHostMessage(msg);
-    } catch(e){}
-  }, 300);
-}
+    } catch(e) {
+      console.warn('[WS] Không parse được:', event.data);
+    }
+  };
 
-function stopHostPolling(){
-  if (qrState.pollTimer) {
-    clearInterval(qrState.pollTimer);
-    qrState.pollTimer = null;
-  }
+  wsState.socket.onerror = function(err){
+    console.error('[WS] Error:', err);
+    updateWSStatus('disconnected');
+    $('qrStatus').textContent = '❌ Lỗi WebSocket. Kiểm tra API key/cluster ID.';
+  };
+
+  wsState.socket.onclose = function(ev){
+    console.log('[WS] Closed. Code:', ev.code, 'Reason:', ev.reason);
+    wsState.connected = false;
+    updateWSStatus('disconnected');
+    if (wsState.mode === 'host' && $('qrPanel') && $('qrPanel').style.display !== 'none') {
+      $('qrStatus').innerHTML = '⚠️ Mất kết nối WebSocket. Bấm <b>Tạo mã mới</b> để thử lại.';
+    }
+  };
 }
 
 function handleHostMessage(msg){
-  if (msg.token !== qrState.token) return;
-  if (Date.now() > qrState.expiresAt) {
+  if (!msg) return;
+  console.log('[Host] Nhận:', msg);
+
+  // Bỏ qua nếu không phải token hiện tại (nếu có token)
+  if (msg.token && msg.token !== wsState.token) {
+    console.warn('[Host] Token không khớp, bỏ qua');
+    return;
+  }
+  if (Date.now() > wsState.expiresAt) {
     $('qrStatus').textContent = '❌ Mã đã hết hạn, ảnh không được nhận.';
     return;
   }
-  if (msg.type === 'hello') {
+
+  // Xử lý các loại message
+  var type = msg.type || (msg.event && msg.event.type) || msg.event;
+  var data = msg.data || msg.payload || msg;
+
+  if (type === 'hello') {
     $('qrStatus').innerHTML = '📱 <b style="color:#10b981">Điện thoại đã kết nối!</b> Đang chờ ảnh...';
-  } else if (msg.type === 'photo') {
-    // Chỉ xử lý lần đầu, bỏ qua các lần gửi lại
-    if (qrState.photoReceived) return;
-    qrState.photoReceived = true;
+  } else if (type === 'photo') {
+    if (wsState.photoReceived) return;
+    wsState.photoReceived = true;
+
+    var dataUrl = data.dataUrl || data.photo || data;
+    if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) {
+      console.warn('[Host] Ảnh không hợp lệ');
+      return;
+    }
 
     $('qrStatus').innerHTML = '✅ <b style="color:#10b981">Đã nhận ảnh!</b> Đang xử lý...';
     stopQRTimer();
-    stopHostPolling();
     setTimeout(function(){
       $('qrPanel').style.display = 'none';
-      showReceivedPhoto(msg.dataUrl);
+      showReceivedPhoto(dataUrl);
       toast('📥 Đã nhận ảnh từ điện thoại');
     }, 300);
   }
 }
 
-/* ============================================================
-   HIỂN THỊ ẢNH VỪA NHẬN + TỰ ĐỘNG CHUYỂN BƯỚC
-   ============================================================ */
+/* ===== PHONE MODE: Gửi ảnh qua WebSocket ===== */
+function runPhoneMode(roomId, token){
+  wsState.mode = 'phone';
+  wsState.roomId = roomId;
+  wsState.token = token;
+
+  document.body.innerHTML = '' +
+    '<div style="max-width:520px;margin:0 auto;padding:16px;font-family:Arial">' +
+      '<div style="background:#10b981;color:#fff;padding:12px;border-radius:10px;text-align:center;font-weight:700">' +
+        '📱 Camera điện thoại — DurianSoil' +
+      '</div>' +
+      '<div id="phoneWsStatus" style="margin:8px 0;padding:8px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:.8rem;text-align:center">⏳ Đang kết nối WebSocket...</div>' +
+      '<div id="phonePermBox" style="margin:12px 0;padding:12px;background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.06)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">' +
+          '<div>' +
+            '<b style="font-size:.9rem">🎥 Quyền Camera</b>' +
+            '<div id="phonePermStatus" style="font-size:.82rem;color:#6b7280;margin-top:4px">Đang kiểm tra...</div>' +
+          '</div>' +
+          '<button id="phoneReqBtn" style="padding:9px 14px;border:none;border-radius:8px;background:#10b981;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer">🔐 Cấp quyền</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="phoneMsg" style="margin:12px 0;padding:10px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;font-size:.85rem">' +
+        'Chờ kết nối WebSocket...' +
+      '</div>' +
+      '<div style="position:relative;width:100%;padding-bottom:75%;background:#111;border-radius:12px;overflow:hidden">' +
+        '<video id="pVideo" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>' +
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">' +
+          '<div style="width:72%;height:26%;border:3px dashed #fff;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.4)"></div>' +
+        '</div>' +
+      '</div>' +
+      '<button id="pShot" style="display:block;width:100%;margin:12px 0;padding:15px;border:none;border-radius:10px;background:#10b981;color:#fff;font-size:1rem;font-weight:700;cursor:pointer" disabled>📸 Chụp & gửi về máy tính</button>' +
+      '<button id="pSwitch" style="display:block;width:100%;margin:8px 0;padding:11px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:.9rem;cursor:pointer">🔄 Đổi camera trước/sau</button>' +
+      '<canvas id="pCanvas" style="display:none"></canvas>' +
+      '<div style="font-size:.8rem;color:#6b7280;margin-top:12px">Ảnh sẽ gửi qua WebSocket — <b>có thể dùng 4G, không cần cùng WiFi!</b></div>' +
+      '<div id="phoneDebug" style="font-size:.7rem;color:#9ca3af;margin-top:8px;font-family:monospace"></div>' +
+    '</div>';
+
+  var facing = 'environment';
+  var stream = null;
+
+  function dbg(t){
+    var el = document.getElementById('phoneDebug');
+    if (el) el.textContent = t;
+  }
+
+  function setMsg(t, color){
+    var el = document.getElementById('phoneMsg');
+    el.textContent = t;
+    el.style.background = color === 'err' ? '#fef2f2' : color === 'ok' ? '#ecfdf5' : '#fffbeb';
+    el.style.borderLeftColor = color === 'err' ? '#ef4444' : color === 'ok' ? '#10b981' : '#f59e0b';
+  }
+
+  function setWsStatus(t, color){
+    var el = document.getElementById('phoneWsStatus');
+    if (!el) return;
+    el.textContent = t;
+    if (color === 'ok') { el.style.background = '#d1fae5'; el.style.color = '#065f46'; }
+    else if (color === 'err') { el.style.background = '#fee2e2'; el.style.color = '#991b1b'; }
+    else { el.style.background = '#fef3c7'; el.style.color = '#92400e'; }
+  }
+
+  function setPermStatus(text, color){
+    var el = document.getElementById('phonePermStatus');
+    el.innerHTML = text;
+    el.style.color = color || '#6b7280';
+  }
+
+  // ===== KẾT NỐI WEBSOCKET =====
+  var wsUrl = 'wss://' + PIESOCKET_CONFIG.clusterId + '.piesocket.com/v3/' +
+              encodeURIComponent(roomId) +
+              '?api_key=' + encodeURIComponent(PIESOCKET_CONFIG.apiKey) +
+              '&notify_self=0';
+
+  console.log('[Phone WS] Connecting to:', wsUrl);
+
+  try {
+    wsState.socket = new WebSocket(wsUrl);
+  } catch(e) {
+    setWsStatus('❌ Không tạo được WebSocket: ' + e.message, 'err');
+    return;
+  }
+
+  wsState.socket.onopen = function(){
+    console.log('[Phone WS] Connected!');
+    setWsStatus('✅ Đã kết nối WebSocket', 'ok');
+    setMsg('Bấm "Cấp quyền" để bật camera.', 'info');
+
+    // Gửi hello
+    try {
+      wsState.socket.send(JSON.stringify({
+        event: 'hello',
+        type: 'hello',
+        token: token,
+        data: { from: 'phone' }
+      }));
+      dbg('Đã gửi hello');
+    } catch(e) {
+      dbg('Lỗi gửi hello: ' + e.message);
+    }
+  };
+
+  wsState.socket.onerror = function(err){
+    console.error('[Phone WS] Error:', err);
+    setWsStatus('❌ Lỗi WebSocket. Kiểm tra mạng.', 'err');
+  };
+
+  wsState.socket.onclose = function(ev){
+    console.log('[Phone WS] Closed:', ev.code);
+    setWsStatus('⚠️ Mất kết nối WebSocket', 'err');
+  };
+
+  // ===== CAMERA =====
+  function startCam(){
+    if (stream) { stream.getTracks().forEach(function(t){t.stop();}); stream = null; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setMsg('Trình duyệt không hỗ trợ camera.', 'err');
+      setPermStatus('⚪ Không hỗ trợ', '#6b7280');
+      return;
+    }
+    setMsg('⏳ Đang xin quyền camera...', 'info');
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false })
+      .then(function(s){
+        stream = s;
+        document.getElementById('pVideo').srcObject = s;
+        setMsg('✅ Camera sẵn sàng. Căn giấy quỳ vào khung rồi bấm Chụp.', 'ok');
+        setPermStatus('🟢 Đã cấp quyền', '#10b981');
+        var btn = document.getElementById('phoneReqBtn');
+        btn.textContent = '✅ Đã cấp';
+        btn.disabled = true;
+        btn.style.background = '#d1fae5';
+        btn.style.color = '#065f46';
+        document.getElementById('pShot').disabled = false;
+      })
+      .catch(function(err){
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setPermStatus('🔴 Đã bị chặn', '#ef4444');
+          setMsg('❌ Bạn đã từ chối quyền camera. Mở Cài đặt trình duyệt → Quyền → Camera → Cho phép.', 'err');
+        } else if (err.name === 'NotFoundError') {
+          setPermStatus('⚠️ Không có camera', '#f59e0b');
+          setMsg('❌ Không tìm thấy camera.', 'err');
+        } else {
+          setMsg('❌ Lỗi camera: ' + err.message, 'err');
+        }
+      });
+  }
+
+  document.getElementById('phoneReqBtn').addEventListener('click', function(){
+    this.textContent = '⏳ Đang xin...';
+    this.disabled = true;
+    startCam();
+  });
+
+  document.getElementById('pShot').addEventListener('click', function(){
+    var v = document.getElementById('pVideo');
+    if (!v.videoWidth) { setMsg('Camera chưa sẵn sàng.', 'err'); return; }
+    if (!wsState.socket || wsState.socket.readyState !== WebSocket.OPEN) {
+      setMsg('❌ WebSocket chưa kết nối. Đợi thêm vài giây.', 'err');
+      return;
+    }
+
+    var c = document.getElementById('pCanvas');
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+
+    // Nén nhỏ hơn để gửi qua WebSocket nhanh hơn
+    var dataUrl = c.toDataURL('image/jpeg', 0.75);
+    var sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
+
+    setMsg('📤 Đang gửi ảnh (' + sizeKB + 'KB) qua WebSocket...', 'info');
+    dbg('Gửi ảnh: ' + sizeKB + 'KB');
+
+    try {
+      wsState.socket.send(JSON.stringify({
+        event: 'photo',
+        type: 'photo',
+        token: token,
+        data: { dataUrl: dataUrl }
+      }));
+      setMsg('✅ Đã gửi ảnh (' + sizeKB + 'KB). Chờ máy tính nhận...', 'ok');
+      dbg('Đã gửi lúc ' + new Date().toLocaleTimeString('vi-VN'));
+    } catch(e) {
+      setMsg('❌ Lỗi gửi: ' + e.message, 'err');
+      dbg('LỖI: ' + e.message);
+    }
+  });
+
+  document.getElementById('pSwitch').addEventListener('click', function(){
+    facing = facing === 'environment' ? 'user' : 'environment';
+    startCam();
+  });
+
+  // Tự động xin quyền nếu đã granted
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'camera' }).then(function(st){
+      if (st.state === 'granted') {
+        setPermStatus('🟢 Đã cấp quyền', '#10b981');
+        startCam();
+      } else if (st.state === 'denied') {
+        setPermStatus('🔴 Đã bị chặn', '#ef4444');
+        setMsg('❌ Camera đã bị chặn. Vào cài đặt trình duyệt để mở lại.', 'err');
+      } else {
+        setPermStatus('🟡 Chưa cấp quyền', '#f59e0b');
+      }
+    }).catch(function(){
+      setPermStatus('🟡 Bấm để cấp quyền', '#f59e0b');
+    });
+  } else {
+    setPermStatus('🟡 Bấm để cấp quyền', '#f59e0b');
+  }
+}
+
+/* ===== HIỂN THỊ ẢNH VỪA NHẬN ===== */
 function showReceivedPhoto(dataUrl){
   var box = $('receivedPhotoBox');
   var img = $('receivedPhotoImg');
@@ -1261,7 +1627,6 @@ function showReceivedPhoto(dataUrl){
     box.scrollIntoView({behavior:'smooth', block:'center'});
   }, 200);
 
-  // Đếm ngược 5 giây
   var countdown = 5;
   $('autoStepCountdown').textContent = countdown;
   clearInterval(autoStepTimer);
@@ -1299,236 +1664,21 @@ function fmtTime(ms){
   return (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
 }
 
-function openQRPanel(){
-  if (isFileProtocol()) {
-    toast('⚠️ Đang mở file:// — QR chỉ mở được trên máy này. Hãy host qua http(s).');
-  }
-  $('qrPanel').style.display = 'block';
-  createQRToken();
-  qrState.lastMsgTs = Date.now() - 1000;
-  startHostPolling();
-}
-
-function createQRToken(){
-  qrState.token = makeToken(24);
-  qrState.expiresAt = Date.now() + 3*60*1000;
-  qrState.photoReceived = false;
-  var box = $('receivedPhotoBox');
-  if (box) { box.style.display = 'none'; box.dataset.dataUrl = ''; }
-  clearInterval(autoStepTimer);
-
-  var url = getBaseUrl() + '?cam=' + encodeURIComponent(qrState.token);
-
-  var boxQR = $('qrBox');
-  boxQR.innerHTML = '';
-  try {
-    new QRCode(boxQR, {
-      text: url,
-      width: 220,
-      height: 220,
-      colorDark: '#047857',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
-  } catch(e) {
-    boxQR.innerHTML = '<div style="color:#ef4444;font-size:.85rem">Không tạo được QR.<br>'+url+'</div>';
-  }
-
-  var urlBox = document.getElementById('qrUrlDisplay');
-  if (!urlBox) {
-    urlBox = document.createElement('div');
-    urlBox.id = 'qrUrlDisplay';
-    urlBox.style.cssText = 'font-size:.72rem;color:#6b7280;margin-top:8px;word-break:break-all;background:#f9fafb;padding:6px;border-radius:6px';
-    boxQR.parentNode.appendChild(urlBox);
-  }
-  urlBox.textContent = url;
-
-  stopQRTimer();
-  qrState.timer = setInterval(function(){
-    var left = qrState.expiresAt - Date.now();
-    if (left <= 0) {
-      $('qrCountdown').textContent = '00:00';
-      $('qrStatus').textContent = '❌ Mã đã hết hạn. Bấm "Tạo mã mới" để tiếp tục.';
-      stopQRTimer();
-      return;
-    }
-    $('qrCountdown').textContent = fmtTime(left);
-  }, 500);
-
-  $('qrStatus').textContent = 'Đang chờ điện thoại kết nối...';
-}
-
-function stopQRTimer(){
-  if (qrState.timer) { clearInterval(qrState.timer); qrState.timer = null; }
-}
-
-/* ============================================================
-   PHONE MODE
-   ============================================================ */
-function runPhoneMode(token){
-  qrState.mode = 'phone';
-  qrState.token = token;
-  document.body.innerHTML = '' +
-    '<div style="max-width:520px;margin:0 auto;padding:16px;font-family:Arial">' +
-      '<div style="background:#10b981;color:#fff;padding:12px;border-radius:10px;text-align:center;font-weight:700">' +
-        '📱 Camera điện thoại — DurianSoil' +
-      '</div>' +
-      '<div id="phonePermBox" style="margin:12px 0;padding:12px;background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.06)">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">' +
-          '<div>' +
-            '<b style="font-size:.9rem">🎥 Quyền Camera</b>' +
-            '<div id="phonePermStatus" style="font-size:.82rem;color:#6b7280;margin-top:4px">Đang kiểm tra...</div>' +
-          '</div>' +
-          '<button id="phoneReqBtn" style="padding:9px 14px;border:none;border-radius:8px;background:#10b981;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer">🔐 Cấp quyền</button>' +
-        '</div>' +
-      '</div>' +
-      '<div id="phoneMsg" style="margin:12px 0;padding:10px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;font-size:.85rem">' +
-        'Bấm "Cấp quyền" để bắt đầu.' +
-      '</div>' +
-      '<div style="position:relative;width:100%;padding-bottom:75%;background:#111;border-radius:12px;overflow:hidden">' +
-        '<video id="pVideo" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>' +
-        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">' +
-          '<div style="width:72%;height:26%;border:3px dashed #fff;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.4)"></div>' +
-        '</div>' +
-      '</div>' +
-      '<button id="pShot" style="display:block;width:100%;margin:12px 0;padding:15px;border:none;border-radius:10px;background:#10b981;color:#fff;font-size:1rem;font-weight:700;cursor:pointer">📸 Chụp & gửi về máy tính</button>' +
-      '<button id="pSwitch" style="display:block;width:100%;margin:8px 0;padding:11px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:.9rem;cursor:pointer">🔄 Đổi camera trước/sau</button>' +
-      '<canvas id="pCanvas" style="display:none"></canvas>' +
-      '<div style="font-size:.8rem;color:#6b7280;margin-top:12px">Sau khi chụp, ảnh sẽ tự động gửi về tab máy tính. <b>Giữ tab này mở cho tới khi thấy thông báo "Đã gửi".</b></div>' +
-      '<div id="phoneDebug" style="font-size:.7rem;color:#9ca3af;margin-top:8px;font-family:monospace"></div>' +
-    '</div>';
-
-  var facing = 'environment';
-  var stream = null;
-
-  function dbg(t){
-    var el = document.getElementById('phoneDebug');
-    if (el) el.textContent = t;
-  }
-
-  function setMsg(t, color){
-    var el = document.getElementById('phoneMsg');
-    el.textContent = t;
-    el.style.background = color === 'err' ? '#fef2f2' : color === 'ok' ? '#ecfdf5' : '#fffbeb';
-    el.style.borderLeftColor = color === 'err' ? '#ef4444' : color === 'ok' ? '#10b981' : '#f59e0b';
-  }
-
-  function setPermStatus(text, color){
-    var el = document.getElementById('phonePermStatus');
-    el.innerHTML = text;
-    el.style.color = color || '#6b7280';
-  }
-
-  function startCam(){
-    if (stream) { stream.getTracks().forEach(function(t){t.stop();}); stream = null; }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setMsg('Trình duyệt không hỗ trợ camera.', 'err');
-      setPermStatus('⚪ Không hỗ trợ', '#6b7280');
-      return;
-    }
-    setMsg('⏳ Đang xin quyền camera...');
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false })
-      .then(function(s){
-        stream = s;
-        document.getElementById('pVideo').srcObject = s;
-        setMsg('✅ Camera sẵn sàng. Căn giấy quỳ vào khung rồi bấm Chụp.', 'ok');
-        setPermStatus('🟢 Đã cấp quyền', '#10b981');
-        var btn = document.getElementById('phoneReqBtn');
-        btn.textContent = '✅ Đã cấp';
-        btn.disabled = true;
-        btn.style.background = '#d1fae5';
-        btn.style.color = '#065f46';
-        try {
-          sendChannel({ type:'hello', token: token });
-          dbg('Đã gửi hello lúc ' + new Date().toLocaleTimeString('vi-VN'));
-        } catch(e) {
-          dbg('LỖI gửi hello: ' + e.message);
-        }
-      })
-      .catch(function(err){
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          setPermStatus('🔴 Đã bị chặn', '#ef4444');
-          setMsg('❌ Bạn đã từ chối quyền camera. Mở Cài đặt trình duyệt → Quyền → Camera → Cho phép.', 'err');
-        } else if (err.name === 'NotFoundError') {
-          setPermStatus('⚠️ Không có camera', '#f59e0b');
-          setMsg('❌ Không tìm thấy camera.', 'err');
-        } else {
-          setMsg('❌ Lỗi camera: ' + err.message, 'err');
-        }
-      });
-  }
-
-  document.getElementById('phoneReqBtn').addEventListener('click', function(){
-    this.textContent = '⏳ Đang xin...';
-    this.disabled = true;
-    startCam();
-  });
-
-  document.getElementById('pShot').addEventListener('click', function(){
-    var v = document.getElementById('pVideo');
-    if (!v.videoWidth) { setMsg('Camera chưa sẵn sàng.', 'err'); return; }
-    var c = document.getElementById('pCanvas');
-    c.width = v.videoWidth;
-    c.height = v.videoHeight;
-    c.getContext('2d').drawImage(v, 0, 0);
-    var dataUrl = c.toDataURL('image/jpeg', 0.85);
-
-    var sizeKB = Math.round(dataUrl.length / 1024);
-    dbg('Ảnh: ' + sizeKB + 'KB · Đang gửi...');
-
-    try {
-      sendChannel({ type:'photo', token: token, dataUrl: dataUrl });
-      setMsg('✅ Đã gửi ảnh (' + sizeKB + 'KB). Chờ máy tính nhận...', 'ok');
-      dbg('Đã gửi lúc ' + new Date().toLocaleTimeString('vi-VN') + ' · ' + sizeKB + 'KB');
-      setTimeout(function(){
-        try { sendChannel({ type:'photo', token: token, dataUrl: dataUrl }); } catch(e){}
-      }, 800);
-      setTimeout(function(){
-        try { sendChannel({ type:'photo', token: token, dataUrl: dataUrl }); } catch(e){}
-      }, 1600);
-    } catch(e) {
-      setMsg('❌ Lỗi gửi: ' + e.message + '. Ảnh quá lớn?', 'err');
-      dbg('LỖI: ' + e.message);
-    }
-  });
-
-  document.getElementById('pSwitch').addEventListener('click', function(){
-    facing = facing === 'environment' ? 'user' : 'environment';
-    startCam();
-  });
-
-  if (navigator.permissions && navigator.permissions.query) {
-    navigator.permissions.query({ name: 'camera' }).then(function(st){
-      if (st.state === 'granted') {
-        setPermStatus('🟢 Đã cấp quyền', '#10b981');
-        startCam();
-      } else if (st.state === 'denied') {
-        setPermStatus('🔴 Đã bị chặn', '#ef4444');
-        setMsg('❌ Camera đã bị chặn. Vào cài đặt trình duyệt để mở lại.', 'err');
-      } else {
-        setPermStatus('🟡 Chưa cấp quyền', '#f59e0b');
-      }
-    }).catch(function(){
-      setPermStatus('🟡 Bấm để cấp quyền', '#f59e0b');
-    });
-  } else {
-    setPermStatus('🟡 Bấm để cấp quyền', '#f59e0b');
-  }
-}
-
+/* ===== GẮN SỰ KIỆN ===== */
 $('qrConnectBtn').addEventListener('click', openQRPanel);
 $('qrRenewBtn').addEventListener('click', function(){
   createQRToken();
-  qrState.lastMsgTs = Date.now() - 1000;
+  connectHostWebSocket();
   toast('🔄 Đã tạo mã QR mới');
 });
 $('qrCloseBtn').addEventListener('click', function(){
   stopQRTimer();
-  stopHostPolling();
+  if (wsState.socket && wsState.mode === 'host') {
+    try { wsState.socket.close(); } catch(e){}
+  }
   $('qrPanel').style.display = 'none';
 });
 
-// Gắn sự kiện cho các nút box ảnh vừa nhận
 (function bindReceivedPhotoButtons(){
   var btnUse = $('useReceivedPhotoBtn');
   if (btnUse) btnUse.addEventListener('click', useReceivedPhoto);
@@ -1545,14 +1695,19 @@ $('qrCloseBtn').addEventListener('click', function(){
   }
 })();
 
+/* ===== PHÁT HIỆN PHONE MODE TỪ URL ===== */
 (function checkPhoneMode(){
-  var m = location.search.match(/[?&]cam=([^&]+)/);
-  if (m && m[1]) {
-    var token = decodeURIComponent(m[1]);
+  var params = new URLSearchParams(location.search);
+  var roomId = params.get('room');
+  var token = params.get('token');
+
+  if (roomId) {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function(){ runPhoneMode(token); });
+      document.addEventListener('DOMContentLoaded', function(){
+        runPhoneMode(roomId, token || '');
+      });
     } else {
-      runPhoneMode(token);
+      runPhoneMode(roomId, token || '');
     }
   }
 })();
