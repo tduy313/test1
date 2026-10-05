@@ -276,7 +276,7 @@ for(var k=0;k<gotoBtns.length;k++){
 }
 
 /* ============================================================
-   CAMERA PERMISSION MANAGER
+   CAMERA PERMISSION
    ============================================================ */
 var camState = {
   permission: 'unknown',
@@ -434,20 +434,20 @@ function initCameraPermission(){
     console.log('- isSecureContext:', window.isSecureContext);
     console.log('- mediaDevices:', !!navigator.mediaDevices);
     console.log('- getUserMedia:', !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
-    
+
     if (!checkSupported && location.protocol === 'https:') {
       console.warn('[Camera] mediaDevices chưa sẵn sàng, thử lại sau 500ms...');
       setTimeout(doInit, 500);
       return;
     }
-    
+
     if (!checkSupported) {
       camState.supported = false;
       camState.permission = 'unsupported';
       renderCameraPermUI();
       return;
     }
-    
+
     queryCameraPermission().then(function(){
       renderCameraPermUI();
       if (camState.permission === 'granted') enumerateCameras();
@@ -497,7 +497,7 @@ function initCameraPermission(){
       });
     }
   }
-  
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', doInit);
   } else {
@@ -575,8 +575,9 @@ function loadImageFromDataUrl(dataUrl){
     tc.height=img.height*scale;
     tc.getContext('2d').drawImage(img,0,0,tc.width,tc.height);
     state.imageThumb=tc.toDataURL('image/jpeg',0.7);
+    // Chuyển sang bước CROP
     goStep(2);
-    drawCropCanvas();
+    initCropSelector();
   };
   img.src=dataUrl;
 }
@@ -599,9 +600,11 @@ $('fileHome').addEventListener('change',handleFile);
    STEPS
    ============================================================ */
 function goStep(n){
-  $('step1').style.display=n===1?'block':'none';
-  $('step2').style.display=n===2?'block':'none';
-  $('step3').style.display=n===3?'block':'none';
+  // 1=chụp, 2=crop, 3=chọn màu, 4=kết quả
+  $('step1').style.display=(n===1)?'block':'none';
+  $('stepCrop').style.display=(n===2)?'block':'none';
+  $('step2').style.display=(n===3)?'block':'none';
+  $('step4').style.display=(n===4)?'block':'none';
   var steps=document.querySelectorAll('.step');
   for(var i=0;i<steps.length;i++)steps[i].classList.toggle('active',i<n);
   window.scrollTo({top:0,behavior:'smooth'});
@@ -612,11 +615,295 @@ function resetScan(){
   var box = $('receivedPhotoBox');
   if (box) { box.style.display = 'none'; box.dataset.dataUrl = ''; }
   clearInterval(autoStepTimer);
+  if(typeof cropState !== 'undefined'){
+    cropState.hasSelection = false;
+    cropState.isDragging = false;
+  }
   goStep(1);
 }
 
 /* ============================================================
-   CROP CANVAS
+   CROP ẢNH THỦ CÔNG
+   ============================================================ */
+var cropState = {
+  isDragging: false,
+  startX: 0,
+  startY: 0,
+  endX: 0,
+  endY: 0,
+  hasSelection: false,
+  scale: 1,
+  canvasW: 0,
+  canvasH: 0
+};
+
+function initCropSelector(){
+  if(!state.image) return;
+
+  var canvas = $('cropSelectCanvas');
+  if (!canvas) return;
+
+  var maxW = Math.min(window.innerWidth - 60, 620);
+  var scale = Math.min(maxW / state.image.width, 1);
+  canvas.width = Math.round(state.image.width * scale);
+  canvas.height = Math.round(state.image.height * scale);
+  cropState.scale = scale;
+  cropState.canvasW = canvas.width;
+  cropState.canvasH = canvas.height;
+
+  cropState.isDragging = false;
+  cropState.hasSelection = false;
+  cropState.startX = 0;
+  cropState.startY = 0;
+  cropState.endX = 0;
+  cropState.endY = 0;
+  $('confirmCropBtn').disabled = true;
+  $('cropSizeInfo').textContent = '—';
+  $('cropPosInfo').textContent = '—';
+
+  redrawCropCanvas();
+
+  canvas.removeEventListener('mousedown', cropMouseDown);
+  canvas.removeEventListener('mousemove', cropMouseMove);
+  canvas.removeEventListener('mouseup', cropMouseUp);
+  canvas.removeEventListener('touchstart', cropTouchStart);
+  canvas.removeEventListener('touchmove', cropTouchMove);
+  canvas.removeEventListener('touchend', cropTouchEnd);
+
+  canvas.addEventListener('mousedown', cropMouseDown);
+  canvas.addEventListener('mousemove', cropMouseMove);
+  canvas.addEventListener('mouseup', cropMouseUp);
+  canvas.addEventListener('touchstart', cropTouchStart, {passive:false});
+  canvas.addEventListener('touchmove', cropTouchMove, {passive:false});
+  canvas.addEventListener('touchend', cropTouchEnd);
+}
+
+function redrawCropCanvas(){
+  var canvas = $('cropSelectCanvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(state.image, 0, 0, canvas.width, canvas.height);
+
+  if (cropState.hasSelection && !cropState.isDragging) {
+    var x1 = Math.min(cropState.startX, cropState.endX);
+    var y1 = Math.min(cropState.startY, cropState.endY);
+    var x2 = Math.max(cropState.startX, cropState.endX);
+    var y2 = Math.max(cropState.startY, cropState.endY);
+    var w = x2 - x1;
+    var h = y2 - y1;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, canvas.width, y1);
+    ctx.fillRect(0, y2, canvas.width, canvas.height - y2);
+    ctx.fillRect(0, y1, x1, h);
+    ctx.fillRect(x2, y1, canvas.width - x2, h);
+    ctx.restore();
+
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x1, y1, w, h);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1;
+    for (var i = 1; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x1 + w * i / 3, y1);
+      ctx.lineTo(x1 + w * i / 3, y2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x1, y1 + h * i / 3);
+      ctx.lineTo(x2, y1 + h * i / 3);
+      ctx.stroke();
+    }
+
+    var cornerSize = 12;
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(x1 - 4, y1 - 4, cornerSize, cornerSize);
+    ctx.fillRect(x2 - cornerSize + 4, y1 - 4, cornerSize, cornerSize);
+    ctx.fillRect(x1 - 4, y2 - cornerSize + 4, cornerSize, cornerSize);
+    ctx.fillRect(x2 - cornerSize + 4, y2 - cornerSize + 4, cornerSize, cornerSize);
+  } else if (cropState.isDragging) {
+    var x1 = Math.min(cropState.startX, cropState.endX);
+    var y1 = Math.min(cropState.startY, cropState.endY);
+    var x2 = Math.max(cropState.startX, cropState.endX);
+    var y2 = Math.max(cropState.startY, cropState.endY);
+    var w = x2 - x1;
+    var h = y2 - y1;
+
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(x1, y1, w, h);
+    ctx.setLineDash([]);
+  }
+}
+
+function getCanvasPos(e, isTouch){
+  var canvas = $('cropSelectCanvas');
+  var rect = canvas.getBoundingClientRect();
+  var clientX = isTouch ? e.touches[0].clientX : e.clientX;
+  var clientY = isTouch ? e.touches[0].clientY : e.clientY;
+  return {
+    x: (clientX - rect.left) * (canvas.width / rect.width),
+    y: (clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+
+function cropMouseDown(e){
+  var pos = getCanvasPos(e, false);
+  cropState.isDragging = true;
+  cropState.hasSelection = false;
+  cropState.startX = pos.x;
+  cropState.startY = pos.y;
+  cropState.endX = pos.x;
+  cropState.endY = pos.y;
+  $('confirmCropBtn').disabled = true;
+  redrawCropCanvas();
+}
+
+function cropMouseMove(e){
+  if(!cropState.isDragging) return;
+  var pos = getCanvasPos(e, false);
+  cropState.endX = pos.x;
+  cropState.endY = pos.y;
+  redrawCropCanvas();
+  updateCropInfo();
+}
+
+function cropMouseUp(e){
+  if(!cropState.isDragging) return;
+  cropState.isDragging = false;
+  finalizeCrop();
+}
+
+function cropTouchStart(e){
+  e.preventDefault();
+  var pos = getCanvasPos(e, true);
+  cropState.isDragging = true;
+  cropState.hasSelection = false;
+  cropState.startX = pos.x;
+  cropState.startY = pos.y;
+  cropState.endX = pos.x;
+  cropState.endY = pos.y;
+  $('confirmCropBtn').disabled = true;
+  redrawCropCanvas();
+}
+
+function cropTouchMove(e){
+  e.preventDefault();
+  if(!cropState.isDragging) return;
+  var pos = getCanvasPos(e, true);
+  cropState.endX = pos.x;
+  cropState.endY = pos.y;
+  redrawCropCanvas();
+  updateCropInfo();
+}
+
+function cropTouchEnd(e){
+  e.preventDefault();
+  if(!cropState.isDragging) return;
+  cropState.isDragging = false;
+  finalizeCrop();
+}
+
+function finalizeCrop(){
+  var w = Math.abs(cropState.endX - cropState.startX);
+  var h = Math.abs(cropState.endY - cropState.startY);
+
+  if (w < 30 || h < 30) {
+    cropState.hasSelection = false;
+    $('confirmCropBtn').disabled = true;
+    $('cropSizeInfo').textContent = '—';
+    $('cropPosInfo').textContent = '—';
+    redrawCropCanvas();
+    return;
+  }
+
+  cropState.hasSelection = true;
+  $('confirmCropBtn').disabled = false;
+  updateCropInfo();
+  redrawCropCanvas();
+}
+
+function updateCropInfo(){
+  var x1 = Math.min(cropState.startX, cropState.endX);
+  var y1 = Math.min(cropState.startY, cropState.endY);
+  var x2 = Math.max(cropState.startX, cropState.endX);
+  var y2 = Math.max(cropState.startY, cropState.endY);
+  var w = Math.round((x2 - x1) / cropState.scale);
+  var h = Math.round((y2 - y1) / cropState.scale);
+  var xOrig = Math.round(x1 / cropState.scale);
+  var yOrig = Math.round(y1 / cropState.scale);
+
+  $('cropSizeInfo').textContent = w + ' × ' + h + ' px';
+  $('cropPosInfo').textContent = '(' + xOrig + ', ' + yOrig + ')';
+}
+
+function confirmCrop(){
+  if(!cropState.hasSelection) {
+    toast('Chưa chọn vùng nào');
+    return;
+  }
+
+  var x1 = Math.min(cropState.startX, cropState.endX) / cropState.scale;
+  var y1 = Math.min(cropState.startY, cropState.endY) / cropState.scale;
+  var x2 = Math.max(cropState.startX, cropState.endX) / cropState.scale;
+  var y2 = Math.max(cropState.startY, cropState.endY) / cropState.scale;
+  var w = x2 - x1;
+  var h = y2 - y1;
+
+  var cropCanvas = document.createElement('canvas');
+  cropCanvas.width = Math.round(w);
+  cropCanvas.height = Math.round(h);
+  var cctx = cropCanvas.getContext('2d');
+  cctx.drawImage(state.image, x1, y1, w, h, 0, 0, cropCanvas.width, cropCanvas.height);
+
+  var croppedDataUrl = cropCanvas.toDataURL('image/jpeg', 0.92);
+  var newImg = new Image();
+  newImg.onload = function(){
+    state.image = newImg;
+    toast('✅ Đã crop ảnh (' + cropCanvas.width + 'x' + cropCanvas.height + ')');
+    goStep(3);
+    drawCropCanvas();
+  };
+  newImg.src = croppedDataUrl;
+}
+
+function skipCrop(){
+  toast('Bỏ qua crop — dùng ảnh gốc');
+  goStep(3);
+  drawCropCanvas();
+}
+
+function resetCropSelection(){
+  cropState.hasSelection = false;
+  cropState.isDragging = false;
+  cropState.startX = 0;
+  cropState.startY = 0;
+  cropState.endX = 0;
+  cropState.endY = 0;
+  $('confirmCropBtn').disabled = true;
+  $('cropSizeInfo').textContent = '—';
+  $('cropPosInfo').textContent = '—';
+  redrawCropCanvas();
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  var btnConfirm = $('confirmCropBtn');
+  if (btnConfirm) btnConfirm.addEventListener('click', confirmCrop);
+
+  var btnReset = $('resetCropBtn');
+  if (btnReset) btnReset.addEventListener('click', resetCropSelection);
+
+  var btnSkip = $('skipCropBtn');
+  if (btnSkip) btnSkip.addEventListener('click', skipCrop);
+});
+
+/* ============================================================
+   CROP CANVAS (chọn màu — Bước 3)
    ============================================================ */
 function drawCropCanvas(){
   if(!state.image)return;
@@ -691,7 +978,7 @@ function analyze(){
   $('refMatch').textContent='pH '+result.refMatch.ph;
   $('recommend').innerHTML=getRecommendation(ph);
   calcLime();
-  goStep(3);
+  goStep(4);
 }
 
 function getRecommendation(ph){
@@ -1174,13 +1461,13 @@ window.addEventListener('online',updateStatus);
 window.addEventListener('offline',updateStatus);
 
 /* ============================================================
-   WEBSOCKET (PieSocket) — THAY THẾ HOÀN TOÀN LOCALSTORAGE
+   WEBSOCKET (PieSocket)
    ============================================================ */
 
 // ===== CẤU HÌNH — THAY BẰNG THÔNG TIN CỦA BẠN =====
 var PIESOCKET_CONFIG = {
-  clusterId: 'free.blr2',  // ← THAY BẰNG CLUSTER ID CỦA BẠN
-  apiKey: 'sJTFr7fnhoX3fbL2dhGUHeH7w6nHBvthAZ0mWR3J'  // ← THAY BẰNG API KEY CỦA BẠN
+  clusterId: 'free.blr2',                                    // ← THAY CLUSTER ID
+  apiKey: 'sJTFr7fnhoX3fbL2dhGUHeH7w6nHBvthAZ0mWR3J'   // ← THAY API KEY
 };
 
 var wsState = {
@@ -1191,7 +1478,7 @@ var wsState = {
   expiresAt: 0,
   timer: null,
   photoReceived: false,
-  mode: 'host'  // 'host' | 'phone'
+  mode: 'host'
 };
 
 var autoStepTimer = null;
@@ -1214,7 +1501,6 @@ function isFileProtocol(){
   return location.protocol === 'file:';
 }
 
-// Cập nhật trạng thái WS trên header
 function updateWSStatus(status){
   var el = $('wsStatus');
   if (!el) return;
@@ -1231,10 +1517,9 @@ function updateWSStatus(status){
   }
 }
 
-/* ===== HOST MODE: Tạo room và lắng nghe ===== */
 function openQRPanel(){
   if (isFileProtocol()) {
-    toast('⚠️ Đang mở file:// — QR chỉ mở được trên máy này. Hãy host qua http(s).');
+    toast('⚠️ Đang mở file:// — QR chỉ mở được trên máy này.');
   }
   $('qrPanel').style.display = 'block';
   createQRToken();
@@ -1242,7 +1527,6 @@ function openQRPanel(){
 }
 
 function createQRToken(){
-  // Room ID ngẫu nhiên, không trùng
   wsState.roomId = 'durian_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   wsState.token = makeToken(16);
   wsState.expiresAt = Date.now() + 3*60*1000;
@@ -1252,7 +1536,6 @@ function createQRToken(){
   if (box) { box.style.display = 'none'; box.dataset.dataUrl = ''; }
   clearInterval(autoStepTimer);
 
-  // URL cho điện thoại: cùng trang + query ?room=...&token=...
   var url = getBaseUrl() + '?room=' + encodeURIComponent(wsState.roomId) + '&token=' + encodeURIComponent(wsState.token);
 
   var boxQR = $('qrBox');
@@ -1299,7 +1582,6 @@ function stopQRTimer(){
 }
 
 function connectHostWebSocket(){
-  // Đóng socket cũ nếu có
   if (wsState.socket) {
     try { wsState.socket.close(); } catch(e){}
     wsState.socket = null;
@@ -1349,7 +1631,7 @@ function connectHostWebSocket(){
   };
 
   wsState.socket.onclose = function(ev){
-    console.log('[WS] Closed. Code:', ev.code, 'Reason:', ev.reason);
+    console.log('[WS] Closed. Code:', ev.code);
     wsState.connected = false;
     updateWSStatus('disconnected');
     if (wsState.mode === 'host' && $('qrPanel') && $('qrPanel').style.display !== 'none') {
@@ -1362,19 +1644,17 @@ function handleHostMessage(msg){
   if (!msg) return;
   console.log('[Host] Nhận:', msg);
 
-  // Bỏ qua nếu không phải token hiện tại (nếu có token)
+  var type = msg.type || msg.event;
+  var data = msg.data || msg.payload || msg;
+
   if (msg.token && msg.token !== wsState.token) {
-    console.warn('[Host] Token không khớp, bỏ qua');
+    console.warn('[Host] Token không khớp');
     return;
   }
   if (Date.now() > wsState.expiresAt) {
-    $('qrStatus').textContent = '❌ Mã đã hết hạn, ảnh không được nhận.';
+    $('qrStatus').textContent = '❌ Mã đã hết hạn.';
     return;
   }
-
-  // Xử lý các loại message
-  var type = msg.type || (msg.event && msg.event.type) || msg.event;
-  var data = msg.data || msg.payload || msg;
 
   if (type === 'hello') {
     $('qrStatus').innerHTML = '📱 <b style="color:#10b981">Điện thoại đã kết nối!</b> Đang chờ ảnh...';
@@ -1388,7 +1668,7 @@ function handleHostMessage(msg){
       return;
     }
 
-    $('qrStatus').innerHTML = '✅ <b style="color:#10b981">Đã nhận ảnh!</b> Đang xử lý...';
+    $('qrStatus').innerHTML = '✅ <b style="color:#10b981">Đã nhận ảnh!</b>';
     stopQRTimer();
     setTimeout(function(){
       $('qrPanel').style.display = 'none';
@@ -1398,7 +1678,62 @@ function handleHostMessage(msg){
   }
 }
 
-/* ===== PHONE MODE: Gửi ảnh qua WebSocket ===== */
+function showReceivedPhoto(dataUrl){
+  var box = $('receivedPhotoBox');
+  var img = $('receivedPhotoImg');
+  var info = $('receivedPhotoInfo');
+
+  img.src = dataUrl;
+  box.style.display = 'block';
+
+  var sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
+  info.textContent = 'Nhận lúc ' + new Date().toLocaleTimeString('vi-VN') + ' · ~' + sizeKB + ' KB';
+  box.dataset.dataUrl = dataUrl;
+
+  setTimeout(function(){
+    box.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 200);
+
+  var countdown = 5;
+  $('autoStepCountdown').textContent = countdown;
+  clearInterval(autoStepTimer);
+  autoStepTimer = setInterval(function(){
+    countdown--;
+    var el = $('autoStepCountdown');
+    if (el) el.textContent = countdown;
+    if (countdown <= 0) {
+      clearInterval(autoStepTimer);
+      useReceivedPhoto();
+    }
+  }, 1000);
+}
+
+function useReceivedPhoto(){
+  clearInterval(autoStepTimer);
+  var box = $('receivedPhotoBox');
+  var dataUrl = box.dataset.dataUrl;
+  if (!dataUrl) { toast('Không có ảnh để dùng'); return; }
+  box.style.display = 'none';
+  loadImageFromDataUrl(dataUrl);
+}
+
+function cancelAutoStep(){
+  clearInterval(autoStepTimer);
+  var box = $('receivedPhotoBox');
+  if (box) box.style.display = 'none';
+}
+
+function fmtTime(ms){
+  if (ms < 0) ms = 0;
+  var s = Math.floor(ms/1000);
+  var m = Math.floor(s/60);
+  s = s % 60;
+  return (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+}
+
+/* ============================================================
+   PHONE MODE
+   ============================================================ */
 function runPhoneMode(roomId, token){
   wsState.mode = 'phone';
   wsState.roomId = roomId;
@@ -1465,7 +1800,6 @@ function runPhoneMode(roomId, token){
     el.style.color = color || '#6b7280';
   }
 
-  // ===== KẾT NỐI WEBSOCKET =====
   var wsUrl = 'wss://' + PIESOCKET_CONFIG.clusterId + '.piesocket.com/v3/' +
               encodeURIComponent(roomId) +
               '?api_key=' + encodeURIComponent(PIESOCKET_CONFIG.apiKey) +
@@ -1485,7 +1819,6 @@ function runPhoneMode(roomId, token){
     setWsStatus('✅ Đã kết nối WebSocket', 'ok');
     setMsg('Bấm "Cấp quyền" để bật camera.', 'info');
 
-    // Gửi hello
     try {
       wsState.socket.send(JSON.stringify({
         event: 'hello',
@@ -1501,7 +1834,7 @@ function runPhoneMode(roomId, token){
 
   wsState.socket.onerror = function(err){
     console.error('[Phone WS] Error:', err);
-    setWsStatus('❌ Lỗi WebSocket. Kiểm tra mạng.', 'err');
+    setWsStatus('❌ Lỗi WebSocket.', 'err');
   };
 
   wsState.socket.onclose = function(ev){
@@ -1509,7 +1842,6 @@ function runPhoneMode(roomId, token){
     setWsStatus('⚠️ Mất kết nối WebSocket', 'err');
   };
 
-  // ===== CAMERA =====
   function startCam(){
     if (stream) { stream.getTracks().forEach(function(t){t.stop();}); stream = null; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -1534,7 +1866,7 @@ function runPhoneMode(roomId, token){
       .catch(function(err){
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setPermStatus('🔴 Đã bị chặn', '#ef4444');
-          setMsg('❌ Bạn đã từ chối quyền camera. Mở Cài đặt trình duyệt → Quyền → Camera → Cho phép.', 'err');
+          setMsg('❌ Bạn đã từ chối quyền camera.', 'err');
         } else if (err.name === 'NotFoundError') {
           setPermStatus('⚠️ Không có camera', '#f59e0b');
           setMsg('❌ Không tìm thấy camera.', 'err');
@@ -1563,11 +1895,10 @@ function runPhoneMode(roomId, token){
     c.height = v.videoHeight;
     c.getContext('2d').drawImage(v, 0, 0);
 
-    // Nén nhỏ hơn để gửi qua WebSocket nhanh hơn
     var dataUrl = c.toDataURL('image/jpeg', 0.75);
     var sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
 
-    setMsg('📤 Đang gửi ảnh (' + sizeKB + 'KB) qua WebSocket...', 'info');
+    setMsg('📤 Đang gửi ảnh (' + sizeKB + 'KB)...', 'info');
     dbg('Gửi ảnh: ' + sizeKB + 'KB');
 
     try {
@@ -1590,7 +1921,6 @@ function runPhoneMode(roomId, token){
     startCam();
   });
 
-  // Tự động xin quyền nếu đã granted
   if (navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: 'camera' }).then(function(st){
       if (st.state === 'granted') {
@@ -1598,7 +1928,7 @@ function runPhoneMode(roomId, token){
         startCam();
       } else if (st.state === 'denied') {
         setPermStatus('🔴 Đã bị chặn', '#ef4444');
-        setMsg('❌ Camera đã bị chặn. Vào cài đặt trình duyệt để mở lại.', 'err');
+        setMsg('❌ Camera đã bị chặn.', 'err');
       } else {
         setPermStatus('🟡 Chưa cấp quyền', '#f59e0b');
       }
@@ -1610,61 +1940,9 @@ function runPhoneMode(roomId, token){
   }
 }
 
-/* ===== HIỂN THỊ ẢNH VỪA NHẬN ===== */
-function showReceivedPhoto(dataUrl){
-  var box = $('receivedPhotoBox');
-  var img = $('receivedPhotoImg');
-  var info = $('receivedPhotoInfo');
-
-  img.src = dataUrl;
-  box.style.display = 'block';
-
-  var sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
-  info.textContent = 'Nhận lúc ' + new Date().toLocaleTimeString('vi-VN') + ' · ~' + sizeKB + ' KB';
-  box.dataset.dataUrl = dataUrl;
-
-  setTimeout(function(){
-    box.scrollIntoView({behavior:'smooth', block:'center'});
-  }, 200);
-
-  var countdown = 5;
-  $('autoStepCountdown').textContent = countdown;
-  clearInterval(autoStepTimer);
-  autoStepTimer = setInterval(function(){
-    countdown--;
-    var el = $('autoStepCountdown');
-    if (el) el.textContent = countdown;
-    if (countdown <= 0) {
-      clearInterval(autoStepTimer);
-      useReceivedPhoto();
-    }
-  }, 1000);
-}
-
-function useReceivedPhoto(){
-  clearInterval(autoStepTimer);
-  var box = $('receivedPhotoBox');
-  var dataUrl = box.dataset.dataUrl;
-  if (!dataUrl) { toast('Không có ảnh để dùng'); return; }
-  box.style.display = 'none';
-  loadImageFromDataUrl(dataUrl);
-}
-
-function cancelAutoStep(){
-  clearInterval(autoStepTimer);
-  var box = $('receivedPhotoBox');
-  if (box) box.style.display = 'none';
-}
-
-function fmtTime(ms){
-  if (ms < 0) ms = 0;
-  var s = Math.floor(ms/1000);
-  var m = Math.floor(s/60);
-  s = s % 60;
-  return (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
-}
-
-/* ===== GẮN SỰ KIỆN ===== */
+/* ============================================================
+   GẮN SỰ KIỆN
+   ============================================================ */
 $('qrConnectBtn').addEventListener('click', openQRPanel);
 $('qrRenewBtn').addEventListener('click', function(){
   createQRToken();
@@ -1690,12 +1968,11 @@ $('qrCloseBtn').addEventListener('click', function(){
       var box = $('receivedPhotoBox');
       if (box) { box.style.display = 'none'; box.dataset.dataUrl = ''; }
       openQRPanel();
-      toast('🔄 Mở lại QR — quét lại bằng điện thoại');
+      toast('🔄 Mở lại QR');
     });
   }
 })();
 
-/* ===== PHÁT HIỆN PHONE MODE TỪ URL ===== */
 (function checkPhoneMode(){
   var params = new URLSearchParams(location.search);
   var roomId = params.get('room');
