@@ -102,14 +102,10 @@ label input:focus,label select:focus,label textarea:focus{outline:2px solid #10b
 .modal-detail{padding:12px;background:#f9fafb;border-radius:10px;margin:10px 0;font-size:.9rem;line-height:1.8}
 .modal-detail b{color:#047857}
 .modal-img{width:100%;border-radius:10px;margin:10px 0;border:1px solid #e5e7eb}
-
-/* QR PANEL */
 #qrPanel{text-align:center;border:2px dashed #10b981}
 #qrBox{display:inline-block;padding:12px;background:#fff;border-radius:12px;margin:8px 0}
 #qrBox img,#qrBox canvas{display:block;border-radius:8px}
 #qrCountdown{color:#ef4444;font-size:1.05rem}
-
-/* CAMERA PERMISSION */
 .cam-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;margin-left:6px;vertical-align:middle}
 .cam-badge.granted{background:#d1fae5;color:#065f46}
 .cam-badge.prompt{background:#fef3c7;color:#92400e}
@@ -118,7 +114,6 @@ label input:focus,label select:focus,label textarea:focus{outline:2px solid #10b
 #camDeviceSelect{padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-family:inherit;width:100%;margin-top:4px}
 #camPermBox{border:1px solid #e5e7eb}
 #requestCamPerm{margin:0}
-
 @media(max-width:480px){
 h2,h3{font-size:.98rem}
 .btn{font-size:.85rem;padding:10px 14px}
@@ -146,7 +141,6 @@ h2,h3{font-size:.98rem}
 
 <main>
 
-<!-- HOME -->
 <section id="home" class="tab-content active">
   <div class="hero">
     <h2>Chào mừng! 👋</h2>
@@ -171,7 +165,6 @@ h2,h3{font-size:.98rem}
   <div id="recentList"><p class="empty">Chưa có dữ liệu</p></div>
 </section>
 
-<!-- SCAN -->
 <section id="scan" class="tab-content">
   <div class="steps">
     <div class="step active">1. Chụp</div>
@@ -182,7 +175,6 @@ h2,h3{font-size:.98rem}
   <div id="step1">
     <h3>Bước 1: Chụp ảnh giấy quỳ</h3>
 
-    <!-- BOX QUYỀN CAMERA -->
     <div id="camPermBox" class="card" style="padding:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <div>
@@ -213,7 +205,6 @@ h2,h3{font-size:.98rem}
     <input type="file" id="fileScan" accept="image/*" style="display:none">
     <canvas id="canvas" style="display:none"></canvas>
 
-    <!-- QR PANEL -->
     <div id="qrPanel" class="card" style="display:none">
       <h4>📱 Quét mã QR bằng điện thoại</h4>
       <p class="muted" id="qrHint">Mở camera điện thoại → quét mã → trình duyệt sẽ mở trang chụp ảnh.</p>
@@ -320,7 +311,6 @@ h2,h3{font-size:.98rem}
   </div>
 </section>
 
-<!-- LOG -->
 <section id="log" class="tab-content">
   <h3>📊 Nhật ký thổ nhưỡng</h3>
   <div class="row">
@@ -344,7 +334,6 @@ h2,h3{font-size:.98rem}
   </div>
 </section>
 
-<!-- ADMIN -->
 <section id="admin" class="tab-content">
   <h3>⚙️ Huấn luyện & Đối chứng</h3>
   <div class="card">
@@ -387,7 +376,6 @@ h2,h3{font-size:.98rem}
   </div>
 </section>
 
-<!-- GUIDE -->
 <section id="guide" class="tab-content">
   <h3>📚 Hướng dẫn</h3>
   <details open class="accordion">
@@ -396,8 +384,7 @@ h2,h3{font-size:.98rem}
       <li><b>Máy tính:</b> Vào tab <b>📸 Đo pH</b> → box <b>🎥 Quyền Camera</b> → bấm <b>🔐 Cấp quyền Camera</b> → chọn <b>Cho phép / Allow</b>.</li>
       <li><b>Nếu bị chặn:</b> Bấm 🔒 trên thanh địa chỉ → Site settings → Camera → Allow → F5.</li>
       <li><b>Điện thoại:</b> Sau khi quét QR, bấm <b>🔐 Cấp quyền</b> trên trang chụp ảnh.</li>
-      <li><b>iOS Safari:</b> Cài đặt → Safari → Camera → Allow.</li>
-      <li><b>Nhiều camera:</b> Sau khi cấp quyền, dropdown <b>📷 Chọn camera</b> sẽ hiện ra.</li>
+      <li><b>Lưu ý:</b> Chrome chỉ cho phép camera khi dùng <b>HTTPS</b> hoặc <b>localhost</b>. Nếu host qua IP LAN, dùng Ngrok hoặc bật cờ <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.</li>
     </ol>
   </details>
   <details class="accordion">
@@ -405,11 +392,11 @@ h2,h3{font-size:.98rem}
     <ol>
       <li>Host file lên HTTP: mở CMD tại thư mục chứa file → chạy <code>python -m http.server 8000</code></li>
       <li>Lấy IP máy tính: gõ <code>ipconfig</code> → tìm IPv4 (VD: 192.168.1.25)</li>
-      <li>Mở trên máy tính: <code>http://192.168.1.25:8000/duriansoil.html</code></li>
+      <li><b>QUAN TRỌNG:</b> Mở trên máy tính bằng <code>http://192.168.1.25:8000/duriansoil.html</code> (KHÔNG dùng localhost) — để máy tính và điện thoại cùng origin.</li>
       <li>Vào tab <b>📸 Đo pH</b> → bấm <b>📱 Kết nối Camera điện thoại</b></li>
       <li>Quét mã QR bằng điện thoại (cùng WiFi)</li>
       <li>Bấm <b>🔐 Cấp quyền</b> trên điện thoại → chụp ảnh</li>
-      <li>Mã QR hết hạn sau 3 phút → bấm <b>Tạo mã mới</b> nếu cần</li>
+      <li>Giữ <b>cả 2 tab đều mở</b> cho tới khi máy tính báo "Đã nhận ảnh"</li>
     </ol>
   </details>
   <details class="accordion">
@@ -457,7 +444,6 @@ h2,h3{font-size:.98rem}
 
 </main>
 
-<!-- MODAL -->
 <div id="modalBg" class="modal-bg">
   <div class="modal">
     <h3>📄 Chi tiết bản ghi</h3>
