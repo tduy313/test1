@@ -1,0 +1,224 @@
+{
+  "targetPH": 5.8,
+  "limePerM2PerPH": 0.1,
+  "limePerTreePerPH": 5,
+  "groups": {
+    "very-acid": {
+      "icon": "🚨",
+      "color": "#dc2626",
+      "title": "ĐẤT CHUA GẮT",
+      "diagnosis": "pH <b>quá thấp</b> — cây sầu riêng không hấp thu được <b>lân (P)</b>, <b>canxi (Ca)</b>, <b>magie (Mg)</b>. <b>Nấm Phytophthora</b> phát triển mạnh → nguy cơ <b>xì mủ, nứt thân</b> rất cao. <b>Nhôm (Al³⁺)</b> và <b>sắt (Fe²⁺)</b> gây độc rễ, cây còi cọc, rụng lá non.",
+      "treatments": [
+        {
+          "title": "1️⃣ Bón vôi CaCO₃ hoặc Dolomite (có Mg):",
+          "lines": [
+            "• Liều lượng: <b>{limePerM2} kg/m²</b> (tương đương <b>{limePerTree} kg/gốc</b>)",
+            "• Chia <b>3 đợt</b>, cách nhau <b>4 tuần</b>",
+            "• Rải quanh tán, cách gốc <b>0.5–1 m</b>, xới nhẹ cho vôi thấm",
+            "• <b>KHÔNG bón cùng phân hóa học</b> — cách ít nhất 15 ngày"
+          ]
+        },
+        {
+          "title": "2️⃣ Bổ sung hữu cơ:",
+          "lines": ["20–30 kg phân chuồng hoai + 1–2 kg vôi bột/gốc/năm"]
+        },
+        {
+          "title": "3️⃣ Xử lý nấm Phytophthora:",
+          "lines": ["Tưới <b>Metalaxyl + Mancozeb</b> quanh gốc, cách 2 tuần/lần × 3 lần"]
+        },
+        {
+          "title": "4️⃣ Che phủ đất:",
+          "lines": ["Rơm rạ, cỏ khô giữ ẩm, hạn chế rửa trôi"]
+        }
+      ],
+      "schedule": [
+        "<b>Tuần 1:</b> Bón đợt 1 vôi + rải hữu cơ quanh tán",
+        "<b>Tuần 3:</b> Tưới nấm Phytophthora (nếu có triệu chứng xì mủ)",
+        "<b>Tuần 5:</b> Bón đợt 2 vôi",
+        "<b>Tuần 9:</b> Bón đợt 3 vôi",
+        "<b>Tuần 8–10:</b> <b>Đo lại pH</b> kiểm tra kết quả",
+        "<b>Tuần 12:</b> Bổ sung vi sinh Trichoderma + Bacillus"
+      ],
+      "notes": [
+        "• <b>Không bón vôi cùng phân hóa học</b> — cách ít nhất 15 ngày",
+        "• <b>Không bón vôi khi đất quá ẩm</b> — dễ gây sốc rễ",
+        "• Rải vôi <b>đều quanh tán</b>, không đổ vào gốc",
+        "• Sau khi bón vôi cần <b>tưới nhẹ</b> để vôi tan",
+        "• Vôi Dolomite tốt hơn vôi nông nghiệp thường (có Mg)"
+      ]
+    },
+    "acid": {
+      "icon": "⚠️",
+      "color": "#ea580c",
+      "title": "ĐẤT CHUA",
+      "diagnosis": "pH <b>hơi thấp</b> so với ngưỡng tối ưu (5.5–6.5) của sầu riêng. Cây vẫn sinh trưởng được nhưng <b>hiệu quả hấp thu dinh dưỡng giảm</b>, dễ bị nấm bệnh khi mưa nhiều.",
+      "treatments": [
+        {
+          "title": "1️⃣ Bón vôi nâng pH lên 5.8:",
+          "lines": [
+            "• Liều lượng: <b>{limePerM2} kg/m²</b> (tương đương <b>{limePerTree} kg/gốc</b>)",
+            "• Chia <b>2 đợt</b>, cách nhau <b>3–4 tuần</b>",
+            "• Ưu tiên <b>vôi Dolomite</b> nếu đất thiếu Mg"
+          ]
+        },
+        {
+          "title": "2️⃣ Tăng hữu cơ:",
+          "lines": ["15–20 kg phân chuồng hoai/gốc/năm"]
+        },
+        {
+          "title": "3️⃣ Bón phân cân đối:",
+          "lines": ["Ưu tiên lân nung chảy, kali sulfate thay vì clorua"]
+        },
+        {
+          "title": "4️⃣ Đo lại pH:",
+          "lines": ["Sau <b>2 tháng</b> để kiểm tra hiệu quả"]
+        }
+      ],
+      "schedule": [
+        "<b>Tuần 1:</b> Bón đợt 1 vôi + rải hữu cơ quanh tán",
+        "<b>Tuần 3:</b> Tưới nấm Phytophthora (nếu có triệu chứng xì mủ)",
+        "<b>Tuần 5:</b> Bón đợt 2 vôi",
+        "<b>Tuần 8–10:</b> <b>Đo lại pH</b> kiểm tra kết quả",
+        "<b>Tuần 12:</b> Bổ sung vi sinh Trichoderma + Bacillus"
+      ],
+      "notes": [
+        "• <b>Không bón vôi cùng phân hóa học</b> — cách ít nhất 15 ngày",
+        "• <b>Không bón vôi khi đất quá ẩm</b> — dễ gây sốc rễ",
+        "• Rải vôi <b>đều quanh tán</b>, không đổ vào gốc",
+        "• Sau khi bón vôi cần <b>tưới nhẹ</b> để vôi tan",
+        "• Vôi Dolomite tốt hơn vôi nông nghiệp thường (có Mg)"
+      ]
+    },
+    "optimal": {
+      "icon": "✅",
+      "color": "#10b981",
+      "title": "ĐẤT TỐI ƯU",
+      "diagnosis": "pH <b>nằm trong khoảng lý tưởng</b> cho sầu riêng (5.5–6.5). Cây hấp thu dinh dưỡng tốt, rễ khỏe, ít bị nấm <i>Phytophthora</i>. Không cần cải tạo gấp — chỉ cần <b>duy trì</b> ổn định.",
+      "treatments": [
+        {
+          "title": "1️⃣ Duy trì ổn định:",
+          "lines": [
+            "• Bón hữu cơ hoai mục <b>2–3 tháng/lần</b>",
+            "• Không bón vôi, không bón vôi bột"
+          ]
+        },
+        {
+          "title": "2️⃣ Kiểm soát nước:",
+          "lines": ["Tránh ngập úng mùa mưa — đào rãnh thoát"]
+        },
+        {
+          "title": "3️⃣ Bổ sung vi sinh:",
+          "lines": ["<b>Trichoderma</b> + <b>Bacillus</b> 2 lần/năm phòng nấm"]
+        },
+        {
+          "title": "4️⃣ Đo lại pH:",
+          "lines": ["Mỗi <b>3–6 tháng</b> để phát hiện sớm bất thường"]
+        }
+      ],
+      "schedule": [
+        "<b>Hàng tháng:</b> Kiểm tra ẩm độ, rãnh thoát nước",
+        "<b>Mỗi 2–3 tháng:</b> Bón hữu cơ hoai mục",
+        "<b>Mỗi 3–6 tháng:</b> Đo pH đất",
+        "<b>Mỗi 6 tháng:</b> Bổ sung vi sinh phòng nấm"
+      ],
+      "notes": [
+        "• <b>Không bón vôi</b> khi không cần — dư Ca gây mất cân đối",
+        "• Kiểm tra pH định kỳ để phát hiện sớm biến động",
+        "• Hữu cơ hoai mục là \"thức ăn chính\" — đừng bỏ qua"
+      ]
+    },
+    "slightly-alkaline": {
+      "icon": "🟡",
+      "color": "#f59e0b",
+      "title": "ĐẤT HƠI KIỀM",
+      "diagnosis": "pH <b>hơi cao</b>. Một số vi chất như <b>sắt (Fe)</b>, <b>kẽm (Zn)</b>, <b>mangan (Mn)</b> bị kết tủa, cây có thể vàng lá non (do thiếu Fe).",
+      "treatments": [
+        {
+          "title": "1️⃣ Hạ pH bằng hữu cơ chua:",
+          "lines": [
+            "• Bón <b>phân chuồng hoai + rơm rạ + vỏ cà phê</b>",
+            "• Hoặc dùng <b>lưu huỳnh nguyên tố (S)</b>: 50–100 g/gốc"
+          ]
+        },
+        {
+          "title": "2️⃣ Bổ sung vi chất dạng chelate:",
+          "lines": [
+            "• <b>Fe-EDDHA</b> (sắt chelate) phun lá hoặc tưới gốc",
+            "• <b>Zn-EDTA</b>, <b>Mn-EDTA</b> nếu cây vàng lá"
+          ]
+        },
+        {
+          "title": "3️⃣ Ngưng bón vôi và phân có Ca cao:",
+          "lines": ["Đá vôi, vỏ trứng, DAP..."]
+        },
+        {
+          "title": "4️⃣ Đo lại pH",
+          "lines": ["sau <b>2–3 tháng</b>"]
+        }
+      ],
+      "schedule": [
+        "<b>Tuần 1:</b> Bón hữu cơ chua (rơm, vỏ cà phê) + lưu huỳnh đợt 1",
+        "<b>Tuần 4:</b> Phun vi chất chelate (Fe-EDDHA, Zn-EDTA)",
+        "<b>Tuần 8:</b> Bón lưu huỳnh đợt 2 (nếu pH còn cao)",
+        "<b>Tuần 8–10:</b> <b>Đo lại pH</b>",
+        "<b>Tuần 12:</b> Đánh giá lại toàn bộ"
+      ],
+      "notes": [
+        "• <b>Lưu huỳnh (S)</b> cần <b>vi sinh vật</b> chuyển hóa — đất phải có hữu cơ",
+        "• <b>Không dùng axit mạnh</b> trực tiếp — gây chết rễ",
+        "• Vi chất chelate (EDDHA/EDTA) <b>không bị kết tủa</b> ở pH cao",
+        "• Kiểm tra nguồn nước tưới — nếu có CaCO₃ cao phải xử lý trước"
+      ]
+    },
+    "alkaline": {
+      "icon": "🔵",
+      "color": "#3b82f6",
+      "title": "ĐẤT KIỀM",
+      "diagnosis": "pH <b>kiềm rõ rệt</b>. Nhiều vi chất bị khóa hoàn toàn. <b>Canxi dư thừa</b> gây đối kháng với K, Mg, Fe. Cây còi, lá vàng, năng suất giảm mạnh.",
+      "treatments": [
+        {
+          "title": "1️⃣ Hạ pH mạnh bằng lưu huỳnh:",
+          "lines": [
+            "• <b>Lưu huỳnh nguyên tố (S)</b>: 100–200 g/gốc/năm, chia 2 đợt",
+            "• Hoặc <b>thạch cao (CaSO₄)</b> nếu đất mặn"
+          ]
+        },
+        {
+          "title": "2️⃣ Bổ sung hữu cơ lớn:",
+          "lines": ["30–50 kg phân chuồng hoai + 5 kg rơm rạ/gốc"]
+        },
+        {
+          "title": "3️⃣ Vi chất chelate:",
+          "lines": ["Fe-EDDHA, Zn-EDTA, Mn-EDTA — bắt buộc dùng"]
+        },
+        {
+          "title": "4️⃣ Kiểm tra nước tưới:",
+          "lines": ["Nếu nước có CaCO₃ cao → cần lọc/trữ trước khi tưới"]
+        },
+        {
+          "title": "5️⃣ Đo lại pH",
+          "lines": ["mỗi <b>2 tháng</b>"]
+        }
+      ],
+      "schedule": [
+        "<b>Tuần 1:</b> Bón hữu cơ chua (rơm, vỏ cà phê) + lưu huỳnh đợt 1",
+        "<b>Tuần 4:</b> Phun vi chất chelate (Fe-EDDHA, Zn-EDTA)",
+        "<b>Tuần 8:</b> Bón lưu huỳnh đợt 2 (nếu pH còn cao)",
+        "<b>Tuần 8–10:</b> <b>Đo lại pH</b>",
+        "<b>Tuần 12:</b> Đánh giá lại toàn bộ"
+      ],
+      "notes": [
+        "• <b>Lưu huỳnh (S)</b> cần <b>vi sinh vật</b> chuyển hóa — đất phải có hữu cơ",
+        "• <b>Không dùng axit mạnh</b> trực tiếp — gây chết rễ",
+        "• Vi chất chelate (EDDHA/EDTA) <b>không bị kết tủa</b> ở pH cao",
+        "• Kiểm tra nguồn nước tưới — nếu có nước CaCO₃ cao phải xử lý trước"
+      ]
+    }
+  },
+  "confidenceLabels": {
+    "80": "🟢 Cao",
+    "60": "🟡 Khá",
+    "40": "🟠 Trung bình",
+    "0": "🔴 Thấp"
+  }
+}
