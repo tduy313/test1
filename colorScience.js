@@ -2,7 +2,7 @@
    colorScience.js
    Thư viện thuần túy: chuyển đổi màu + ước lượng pH
    KHÔNG đụng DOM — có thể dùng cho Node.js, Web Worker, test...
-   
+
    API:
      CS.rgb2hsv(r,g,b)              → {h,s,v}
      CS.rgb2lab(r,g,b)              → {L,a,b}
@@ -11,24 +11,53 @@
      CS.sampleColors(imgData,x,y,n) → {r,g,b,count}
      CS.estimatePH(correctedRGB, opts) → {ph, confidence, lab, bestDE, refMatch, deltas}
      CS.classifyPH(ph)              → {status, cls, color}
+     CS.classifyPHDetailed(ph)      → string
+     CS.PH_DETAILED_LABELS          → map nhãn tiếng Việt + khuyến nghị
    ============================================================ */
 
 (function(global){
   'use strict';
 
   /* ---------- HẰNG SỐ MẶC ĐỊNH ---------- */
+
+  /**
+   * Bảng màu tham chiếu giấy quỳ — dải pH 3.0 → 9.0 (bước 0.5)
+   * Màu theo thang quỳ phổ thông:
+   *   đỏ đậm → đỏ → đỏ cam → cam → vàng cam → vàng xanh
+   *   → xanh lá → xanh ngọc → xanh dương → xanh tím → tím
+   */
   const DEFAULT_REF_COLORS = [
-    {ph:4.0, r:220, g:50,  b:60 },
-    {ph:4.5, r:230, g:100, b:70 },
-    {ph:5.0, r:240, g:160, b:80 },
-    {ph:5.5, r:250, g:210, b:90 },
-    {ph:6.0, r:170, g:220, b:100},
-    {ph:6.5, r:110, g:200, b:120},
-    {ph:7.0, r:70,  g:180, b:180},
-    {ph:7.5, r:60,  g:130, b:200}
+    {ph:3.0, r:200, g:30,  b:40 },   // đỏ đậm
+    {ph:3.5, r:210, g:40,  b:50 },   // đỏ
+    {ph:4.0, r:220, g:50,  b:60 },   // đỏ tươi
+    {ph:4.5, r:230, g:100, b:70 },   // đỏ cam
+    {ph:5.0, r:240, g:160, b:80 },   // cam
+    {ph:5.5, r:250, g:210, b:90 },   // vàng cam
+    {ph:6.0, r:170, g:220, b:100},   // vàng xanh
+    {ph:6.5, r:110, g:200, b:120},   // xanh lá
+    {ph:7.0, r:70,  g:180, b:180},   // xanh ngọc
+    {ph:7.5, r:60,  g:130, b:200},   // xanh dương
+    {ph:8.0, r:60,  g:100, b:210},   // xanh dương đậm
+    {ph:8.5, r:70,  g:80,  b:200},   // xanh tím
+    {ph:9.0, r:90,  g:60,  b:180}    // tím
   ];
 
   const DEFAULT_COEFFICIENTS = {a:0.012, b:-0.015, c:0.008, d:0.025, e:3.5};
+
+  const PH_MIN = 3.0;
+  const PH_MAX = 9.0;
+
+  /**
+   * Nhãn tiếng Việt + khuyến nghị cải tạo đất cho từng nhóm pH chi tiết
+   */
+  const PH_DETAILED_LABELS = {
+    'very-strong-acid':  {vi:'Chua rất mạnh', advice:'Bón vôi lượng lớn, cải tạo đất mạnh, bổ sung hữu cơ'},
+    'strong-acid':       {vi:'Chua mạnh',     advice:'Bón vôi, tăng cường phân hữu cơ, trồng cây chịu chua'},
+    'acid':              {vi:'Chua',          advice:'Bón vôi nhẹ, phù hợp nhiều loại cây trồng'},
+    'optimal':           {vi:'Tối ưu',        advice:'Đất lý tưởng cho hầu hết cây trồng, duy trì độ ẩm'},
+    'slightly-alkaline': {vi:'Kiềm nhẹ',      advice:'Bón phân hữu cơ, thêm lưu huỳnh nếu cần hạ pH'},
+    'alkaline':          {vi:'Kiềm',          advice:'Bón thạch cao, rửa mặn, tăng hữu cơ, chọn cây chịu kiềm'}
+  };
 
   /* ============================================================
      CHUYỂN ĐỔI KHÔNG GIAN MÀU
@@ -308,8 +337,8 @@
                 + coefficients.e;
     ph = 0.8 * ph + 0.2 * phReg;
 
-    // 5. Clamp vào ngưỡng hợp lệ của giấy quỳ
-    ph = Math.max(4.0, Math.min(7.5, ph));
+    // 5. Clamp vào ngưỡng hợp lệ của giấy quỳ (đã mở rộng 3.0 → 9.0)
+    ph = Math.max(PH_MIN, Math.min(PH_MAX, ph));
 
     // 6. Tính độ tin cậy
     const bestDE   = top[0].dE;
@@ -337,25 +366,27 @@
      ============================================================ */
 
   /**
-   * Phân loại pH đất (thô — 3 nhóm chính)
+   * Phân loại pH đất (thô — 4 nhóm chính)
    * Dùng cho badge status trên UI
    */
   function classifyPH(ph){
-    if(ph < 5.5)  return {status:'Chua',    cls:'status-chua',  color:'#ef4444'};
-    if(ph <= 6.5) return {status:'Tối ưu',  cls:'status-toiuu', color:'#10b981'};
-    return         {status:'Kiềm',    cls:'status-kiem',  color:'#3b82f6'};
+    if(ph < 5.5)  return {status:'Chua',      cls:'status-chua',    color:'#ef4444'};
+    if(ph <= 6.5) return {status:'Tối ưu',    cls:'status-toiuu',   color:'#10b981'};
+    if(ph <= 7.5) return {status:'Kiềm nhẹ',  cls:'status-kiem',    color:'#3b82f6'};
+    return         {status:'Kiềm mạnh', cls:'status-kiemmanh', color:'#8b5cf6'};
   }
 
   /**
-   * Phân loại pH chi tiết (5 nhóm)
+   * Phân loại pH chi tiết (6 nhóm)
    * Dùng cho khuyến nghị cải tạo đất
    */
   function classifyPHDetailed(ph){
-    if(ph < 5.0)  return 'very-acid';
-    if(ph < 5.5)  return 'acid';
-    if(ph <= 6.5) return 'optimal';
-    if(ph <= 7.2) return 'slightly-alkaline';
-    return 'alkaline';
+    if(ph < 4.0)  return 'very-strong-acid';   // 3.0 – 3.9
+    if(ph < 5.0)  return 'strong-acid';        // 4.0 – 4.9
+    if(ph < 5.5)  return 'acid';               // 5.0 – 5.4
+    if(ph <= 6.5) return 'optimal';            // 5.5 – 6.5
+    if(ph <= 7.5) return 'slightly-alkaline';  // 6.6 – 7.5
+    return 'alkaline';                         // 7.6 – 9.0
   }
 
   /* ============================================================
@@ -379,7 +410,10 @@
     classifyPHDetailed,
     // Hằng số
     DEFAULT_REF_COLORS,
-    DEFAULT_COEFFICIENTS
+    DEFAULT_COEFFICIENTS,
+    PH_DETAILED_LABELS,
+    PH_MIN,
+    PH_MAX
   };
 
   if(typeof module !== 'undefined' && module.exports){
