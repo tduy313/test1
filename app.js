@@ -778,11 +778,18 @@ function drawCropCanvas(){
   pickColor(c.width / 2, c.height / 2);
 }
 
+/* ============================================================
+   PICK COLOR — sử dụng sampling nâng cao
+   ============================================================ */
 function pickColor(x, y){
   if(!state.imageDataFull) return;
   var imgData = state.imageDataFull;
-  var sampled = CS.sampleColors(imgData, Math.round(x), Math.round(y), 5);
-  if(!sampled.count){ toast('Không lấy được mẫu màu'); return; }
+  var sampled = CS.sampleColors(imgData, Math.round(x), Math.round(y), 7); // size 7 thay vì 5
+
+  if(!sampled.count){
+    toast('Không lấy được mẫu màu');
+    return;
+  }
 
   state.pickedRGB = { r: sampled.r, g: sampled.g, b: sampled.b };
 
@@ -796,29 +803,29 @@ function pickColor(x, y){
   state.pickedHSV = CS.rgb2hsv(corr.r, corr.g, corr.b);
   state.pickedLab = CS.rgb2lab(corr.r, corr.g, corr.b);
 
+  // Đánh giá chất lượng mẫu
+  var quality = CS.assessSampleQuality(corr);
+
   $('pickPos').textContent = '(' + Math.round(x) + ', ' + Math.round(y) + ') · ' + sampled.count + ' mẫu';
   $('rgbVal').textContent  = sampled.r + ', ' + sampled.g + ', ' + sampled.b;
   $('rgbCorr').textContent = corr.r + ', ' + corr.g + ', ' + corr.b;
   $('hsvVal').textContent  = state.pickedHSV.h + '°, ' + state.pickedHSV.s + '%, ' + state.pickedHSV.v + '%';
   $('swatch').style.background = 'rgb(' + corr.r + ',' + corr.g + ',' + corr.b + ')';
-}
 
-if($('cropCanvas')){
-  $('cropCanvas').addEventListener('click', function(e){
-    var rect = e.target.getBoundingClientRect();
-    var x = (e.clientX - rect.left) * (e.target.width / rect.width);
-    var y = (e.clientY - rect.top) * (e.target.height / rect.height);
-    pickColor(x, y);
-  });
+  // Cảnh báo nếu chất lượng kém
+  if(quality.quality === 'poor'){
+    toast('⚠️ ' + quality.issues[0]);
+  } else if(quality.quality === 'warning' && quality.issues.length){
+    console.warn('[Sample]', quality.issues.join('; '));
+  }
 }
 
 /* ============================================================
-   ANALYZE — gọi colorScience
+   ANALYZE — sử dụng estimatePH nâng cao
    ============================================================ */
 function analyze(){
   if(!state.pickedRGBCorrected){ toast('Chưa chọn màu!'); return; }
 
-  // ⭐ GỌI COLORSCIENCE — không còn estimatePHAdvanced nội bộ
   var result = CS.estimatePH(state.pickedRGBCorrected);
   var ph = result.ph;
   var info = CS.classifyPH(ph);
@@ -835,6 +842,7 @@ function analyze(){
   var targetPH = ph;
   var duration = 900;
   var startTime = performance.now();
+
   function tick(now){
     var p = Math.min((now - startTime) / duration, 1);
     var eased = 1 - Math.pow(1 - p, 3);
@@ -864,29 +872,19 @@ function analyze(){
   $('de3').textContent = result.bestDE.toFixed(1);
   $('refMatch').textContent = 'pH ' + result.refMatch.ph;
 
+  // ⭐ Hiển thị thêm thông tin CCT nếu có element
+  var cctEl = $('cctInfo');
+  if(cctEl && result.cct){
+    var cctDesc = CS.describeCCT(result.cct);
+    cctEl.innerHTML = '💡 Ánh sáng: <b>' + result.cct + 'K</b> — ' + cctDesc.label +
+                      (cctDesc.quality === 'warning' ? ' <span style="color:#dc2626">⚠️</span>' : '');
+  }
+
   $('recommend').innerHTML = buildRecommendation(ph, result.confidence, result.lab, result.bestDE, result.refMatch);
 
   goStep(4);
 
   if(conf >= 80) celebrate();
-}
-
-function celebrate(){
-  setTimeout(function(){
-    for(var i = 0; i < 12; i++){
-      (function(){
-        var c = document.createElement('div');
-        c.textContent = ['🌱','✨','🌿','💚'][i % 4];
-        c.style.cssText = 'position:fixed;left:' + (50 + (Math.random()-0.5)*40) + '%;top:40%;font-size:' + (14 + Math.random()*14) + 'px;pointer-events:none;z-index:9998;opacity:0;transition:all 1.2s cubic-bezier(.34,1.56,.64,1)';
-        document.body.appendChild(c);
-        requestAnimationFrame(function(){
-          c.style.opacity = '1';
-          c.style.transform = 'translate(' + ((Math.random()-0.5)*300) + 'px,' + (-100 - Math.random()*200) + 'px) rotate(' + ((Math.random()-0.5)*360) + 'deg)';
-        });
-        setTimeout(function(){ c.remove(); }, 1400);
-      })();
-    }
-  }, 300);
 }
 
 /* ============================================================
